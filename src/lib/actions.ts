@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createServerClient } from './supabase-server';
+import { cookies } from 'next/headers';
 import { TransactionSchema, TransferSchema, SavingGoalFundSchema, SavingGoalCreateSchema } from './schemas';
 import type { ActionResult } from '@/types/finance';
 
@@ -148,6 +149,8 @@ export async function actionCreateSavingGoal(data: {
 
   const { name, targetAmount, currentAmount, deadline } = parsed.data;
   const supabase = createServerClient();
+  const cookieStore = await cookies();
+  const profile = cookieStore.get('current_profile')?.value || 'silva';
 
   const { data: goal, error } = await supabase
     .from('saving_goals')
@@ -156,6 +159,7 @@ export async function actionCreateSavingGoal(data: {
       target_amount: targetAmount,
       current_amount: currentAmount || 0,
       deadline: deadline || null,
+      profile
     }])
     .select('id')
     .single();

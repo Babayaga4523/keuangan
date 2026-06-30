@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Menu, 
   X, 
@@ -25,6 +25,27 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [profile, setProfile] = useState<'silva' | 'yoga'>('silva');
+  const [showSwitcher, setShowSwitcher] = useState(false);
+
+  useEffect(() => {
+    const getCookie = (name: string) => {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop()?.split(';').shift();
+      return undefined;
+    };
+    const current = getCookie('current_profile');
+    if (current === 'silva' || current === 'yoga') {
+      setProfile(current);
+    }
+  }, []);
+
+  const handleProfileSwitch = (newProfile: 'silva' | 'yoga') => {
+    document.cookie = `current_profile=${newProfile}; path=/; max-age=31536000; SameSite=Lax`;
+    setProfile(newProfile);
+    window.location.reload();
+  };
 
   return (
     <>
@@ -98,20 +119,58 @@ export default function Sidebar() {
           })}
         </nav>
 
-        {/* Footer Area with Profile */}
-        <div className="p-4 border-t border-[#c6c6cd] bg-[#f7f9fb]">
-          <div className="flex items-center p-2.5 rounded-lg hover:bg-[#eceef0] transition-colors cursor-pointer justify-between">
-            <div className="flex items-center space-x-3">
+        {/* Footer Area with Profile Switcher */}
+        <div className="p-4 border-t border-[#c6c6cd] bg-[#f7f9fb] relative">
+          <div 
+            onClick={() => setShowSwitcher(!showSwitcher)}
+            className="flex items-center p-2.5 rounded-lg hover:bg-[#eceef0] transition-colors cursor-pointer justify-between group"
+          >
+            <div className="flex items-center space-x-3 min-w-0">
               <div className="w-9 h-9 rounded-full bg-black text-white text-xs font-bold flex items-center justify-center uppercase shrink-0">
-                SY
+                {profile === 'silva' ? 'S' : 'Y'}
               </div>
               <div className="flex flex-col min-w-0">
-                <p className="text-xs font-bold text-black truncate leading-tight">Silva & Yoga</p>
-                <p className="text-[10px] text-[#45464d] font-medium truncate">Family Account</p>
+                <p className="text-xs font-bold text-black truncate leading-tight">
+                  {profile === 'silva' ? 'Silva' : 'Yoga'}
+                </p>
+                <p className="text-[10px] text-[#45464d] font-semibold truncate leading-none mt-0.5">Ganti Profil...</p>
               </div>
             </div>
-            <Settings className="h-4 w-4 text-[#45464d] hover:text-black hover:rotate-45 transition-transform duration-200" />
+            <Settings className="h-4 w-4 text-[#45464d] hover:text-black hover:rotate-45 transition-transform duration-200 shrink-0" />
           </div>
+
+          {showSwitcher && (
+            <>
+              {/* Invisible overlay to close switcher on click outside */}
+              <div 
+                className="fixed inset-0 z-45"
+                onClick={() => setShowSwitcher(false)}
+              />
+              <div className="absolute bottom-16 left-4 right-4 bg-white border border-[#e2e8f0] rounded-xl p-1.5 shadow-lg z-50 space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                <p className="text-[8px] text-slate-400 font-bold uppercase px-2.5 py-1 tracking-wider border-b border-slate-100 mb-1">Pilih Profil Aktif</p>
+                <button
+                  onClick={() => {
+                    handleProfileSwitch('silva');
+                    setShowSwitcher(false);
+                  }}
+                  className={`w-full flex items-center space-x-3 p-2 rounded-lg text-left transition-colors ${profile === 'silva' ? 'bg-[#f2f4f6] font-bold' : 'hover:bg-slate-50'}`}
+                >
+                  <div className="w-6 h-6 rounded-full bg-black text-white text-[9px] font-bold flex items-center justify-center">S</div>
+                  <span className="text-xs text-black">Silva</span>
+                </button>
+                <button
+                  onClick={() => {
+                    handleProfileSwitch('yoga');
+                    setShowSwitcher(false);
+                  }}
+                  className={`w-full flex items-center space-x-3 p-2 rounded-lg text-left transition-colors ${profile === 'yoga' ? 'bg-[#f2f4f6] font-bold' : 'hover:bg-slate-50'}`}
+                >
+                  <div className="w-6 h-6 rounded-full bg-black text-white text-[9px] font-bold flex items-center justify-center">Y</div>
+                  <span className="text-xs text-black">Yoga</span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </aside>
 

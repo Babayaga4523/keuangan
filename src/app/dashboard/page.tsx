@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { formatRupiah } from '@/utils/format';
+import { cookies } from 'next/headers';
 import { 
   ArrowUpRight, 
   MoreHorizontal,
@@ -24,11 +25,14 @@ export const revalidate = 0; // Live data
 
 export default async function DashboardPage() {
   const supabase = createServerClient();
+  const cookieStore = await cookies();
+  const profile = cookieStore.get('current_profile')?.value || 'silva';
 
   // 1. Fetch Accounts
   const { data: accountsRaw } = await supabase
     .from('accounts')
     .select('*')
+    .eq('profile', profile)
     .order('balance', { ascending: false });
 
   const accounts = accountsRaw || [];
@@ -46,11 +50,13 @@ export default async function DashboardPage() {
     supabase
       .from('transactions')
       .select('*')
+      .eq('profile', profile)
       .gte('transaction_date', startOfMonth)
       .lte('transaction_date', endOfMonth),
     supabase
       .from('transactions')
       .select('*')
+      .eq('profile', profile)
       .gte('transaction_date', thirtyDaysAgo)
       .lte('transaction_date', now.toISOString().split('T')[0])
       .order('transaction_date', { ascending: false })
@@ -159,6 +165,7 @@ export default async function DashboardPage() {
   const { data: savingGoals } = await supabase
     .from('saving_goals')
     .select('*')
+    .eq('profile', profile)
     .limit(2);
 
   return (

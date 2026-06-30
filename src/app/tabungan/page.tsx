@@ -2,22 +2,27 @@ import { createServerClient } from '@/lib/supabase-server';
 import NewSavingGoalForm from '@/components/client/new-saving-goal-form';
 import SavingGoalCard from '@/components/client/saving-goal-card';
 import { Target, Sparkles } from 'lucide-react';
+import { cookies } from 'next/headers';
 
 export const revalidate = 0; // Live data
 
 export default async function TabunganPage() {
   const supabase = createServerClient();
+  const cookieStore = await cookies();
+  const profile = cookieStore.get('current_profile')?.value || 'silva';
 
   // Fetch saving goals and accounts in parallel
   const [goalsRes, accountsRes] = await Promise.all([
     supabase
       .from('saving_goals')
       .select('*')
+      .eq('profile', profile)
       .order('created_at', { ascending: false }),
     supabase
       .from('accounts')
       .select('id, name, balance')
       .eq('is_active', true)
+      .eq('profile', profile)
       .order('name'),
   ]);
 

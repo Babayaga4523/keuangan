@@ -1,10 +1,13 @@
 import { createServerClient } from '@/lib/supabase-server';
 import ReportManager, { type Transaction } from '@/components/client/report-manager';
+import { cookies } from 'next/headers';
 
 export const revalidate = 0; // Ensure reports are always live
 
 export default async function LaporanPage() {
   const supabase = createServerClient();
+  const cookieStore = await cookies();
+  const profile = cookieStore.get('current_profile')?.value || 'silva';
 
   // Fetch transactions, accounts, and categories in parallel
   const [txRes, accRes, catRes] = await Promise.all([
@@ -20,9 +23,10 @@ export default async function LaporanPage() {
         categories (id, name),
         destination_account:destination_account_id (id, name)
       `)
+      .eq('profile', profile)
       .order('transaction_date', { ascending: false })
       .order('created_at', { ascending: false }),
-    supabase.from('accounts').select('id, name').order('name'),
+    supabase.from('accounts').select('id, name').eq('profile', profile).order('name'),
     supabase.from('categories').select('id, name, type').order('name')
   ]);
 

@@ -39,6 +39,7 @@ CREATE TABLE accounts (
     balance      DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
     currency     VARCHAR(3) NOT NULL DEFAULT 'IDR',
     is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+    profile      VARCHAR(50) DEFAULT 'silva',
     created_at   TIMESTAMPTZ DEFAULT NOW(),
     updated_at   TIMESTAMPTZ DEFAULT NOW(),
 
@@ -65,6 +66,7 @@ CREATE TABLE transactions (
     type                    transaction_type NOT NULL,
     transaction_date        DATE NOT NULL DEFAULT CURRENT_DATE,
     description             TEXT,
+    profile                 VARCHAR(50) DEFAULT 'silva',
     created_at              TIMESTAMPTZ DEFAULT NOW(),
 
     CONSTRAINT transfer_needs_destination
@@ -84,6 +86,7 @@ CREATE TABLE saving_goals (
     current_amount DECIMAL(15, 2) NOT NULL DEFAULT 0.00 CHECK (current_amount >= 0),
     deadline       DATE,
     is_completed   BOOLEAN NOT NULL DEFAULT FALSE,
+    profile        VARCHAR(50) DEFAULT 'silva',
     created_at     TIMESTAMPTZ DEFAULT NOW(),
     updated_at     TIMESTAMPTZ DEFAULT NOW()
 );
@@ -297,3 +300,19 @@ INSERT INTO categories (name, type, icon, color) VALUES
 INSERT INTO saving_goals (name, target_amount, current_amount, deadline) VALUES
 ('Dana Darurat', 10000000.00, 3500000.00, '2027-06-01'),
 ('Umroh', 25000000.00, 8000000.00, '2027-12-31');
+
+-- ============================================================
+-- SECTION 7: PROFILE PROPAGATION TRIGGERS
+-- ============================================================
+CREATE OR REPLACE FUNCTION tr_set_transaction_profile()
+RETURNS TRIGGER AS $$
+BEGIN
+    SELECT profile INTO NEW.profile FROM accounts WHERE id = NEW.account_id;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE TRIGGER tg_set_transaction_profile
+BEFORE INSERT ON transactions
+FOR EACH ROW
+EXECUTE FUNCTION tr_set_transaction_profile();
