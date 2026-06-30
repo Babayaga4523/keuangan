@@ -197,9 +197,9 @@ export default function TransactionManager({
       </div>
 
       {/* Main Grid Layout */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Filter & Ledger Table (Spans 8 columns) */}
-        <div className="xl:col-span-8 space-y-6">
+        <div className="lg:col-span-8 space-y-6">
           {/* Filter Bar */}
           <div className="bg-white border border-[#e2e8f0] p-4 rounded-xl flex flex-wrap items-center gap-4 shadow-[0_1px_2px_rgba(15,23,42,0.02)]">
             <div className="flex-1 min-w-[200px] relative">
@@ -365,7 +365,7 @@ export default function TransactionManager({
         </div>
 
         {/* Right Column: Spending Analytics Panel (Spans 4 columns) */}
-        <div className="xl:col-span-4 space-y-6">
+        <div className="lg:col-span-4 space-y-6">
           <div className="bg-white border border-[#e2e8f0] p-6 rounded-xl space-y-6 shadow-sm">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-black text-sm uppercase tracking-wider">Spending Analytics</h3>
