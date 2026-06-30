@@ -108,7 +108,9 @@ export default function AddAccountDialog() {
             <Label className="text-xs font-semibold text-slate-500">Jenis Rekening</Label>
             <Select value={type} onValueChange={(val) => setType(val as 'CASH' | 'BANK' | 'E_WALLET')}>
               <SelectTrigger className="border-[#e2e8f0] rounded-lg">
-                <SelectValue />
+                <SelectValue>
+                  {type === 'BANK' ? 'Bank / Rekening Tabungan' : type === 'E_WALLET' ? 'E-Wallet (Gopay, OVO, dll)' : 'Cash / Uang Tunai'}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-white border border-[#e2e8f0]">
                 <SelectItem value="BANK">Bank / Rekening Tabungan</SelectItem>

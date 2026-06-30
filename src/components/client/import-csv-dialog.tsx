@@ -168,7 +168,9 @@ export default function ImportCSVDialog({ accounts }: ImportCSVDialogProps) {
             <Label className="text-xs font-semibold text-slate-500">Pilih Rekening Tujuan</Label>
             <Select value={accountId} onValueChange={(val) => setAccountId(val || '')}>
               <SelectTrigger className="border-[#e2e8f0] rounded-lg">
-                <SelectValue placeholder="Pilih rekening..." />
+                <SelectValue placeholder="Pilih rekening...">
+                  {accounts.find(a => a.id === accountId)?.name}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-white border border-[#e2e8f0]">
                 {accounts.map((acc) => (

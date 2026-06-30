@@ -182,7 +182,11 @@ export default function RecurringManager({ recurrings, accounts, categories, pro
               <div className="space-y-2">
                 <Label className="text-xs font-semibold text-slate-500">Rekening</Label>
                 <Select value={accountId} onValueChange={(val) => setAccountId(val || '')}>
-                  <SelectTrigger className="border-[#e2e8f0] rounded-lg"><SelectValue placeholder="Pilih rekening..." /></SelectTrigger>
+                  <SelectTrigger className="border-[#e2e8f0] rounded-lg">
+                    <SelectValue placeholder="Pilih rekening...">
+                      {accounts.find(a => a.id === accountId)?.name}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent className="bg-white border border-[#e2e8f0]">
                     {accounts.map((acc) => <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>)}
                   </SelectContent>
@@ -192,7 +196,11 @@ export default function RecurringManager({ recurrings, accounts, categories, pro
               <div className="space-y-2">
                 <Label className="text-xs font-semibold text-slate-500">Kategori (Opsional)</Label>
                 <Select value={categoryId} onValueChange={(val) => setCategoryId(val || '')}>
-                  <SelectTrigger className="border-[#e2e8f0] rounded-lg"><SelectValue placeholder="Pilih kategori..." /></SelectTrigger>
+                  <SelectTrigger className="border-[#e2e8f0] rounded-lg">
+                    <SelectValue placeholder="Pilih kategori...">
+                      {categories.find(c => c.id === categoryId)?.name}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent className="bg-white border border-[#e2e8f0]">
                     {categories.filter((c) => c.type === type).map((cat) => (
                       <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
@@ -221,7 +229,11 @@ export default function RecurringManager({ recurrings, accounts, categories, pro
                 <div className="space-y-2">
                   <Label className="text-xs font-semibold text-slate-500">Frekuensi</Label>
                   <Select value={frequency} onValueChange={(v) => setFrequency((v || 'MONTHLY') as 'DAILY' | 'WEEKLY' | 'MONTHLY')}>
-                    <SelectTrigger className="border-[#e2e8f0] rounded-lg"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="border-[#e2e8f0] rounded-lg">
+                      <SelectValue>
+                        {frequency === 'DAILY' ? 'Harian' : frequency === 'WEEKLY' ? 'Mingguan' : 'Bulanan'}
+                      </SelectValue>
+                    </SelectTrigger>
                     <SelectContent className="bg-white border border-[#e2e8f0]">
                       <SelectItem value="DAILY">Harian</SelectItem>
                       <SelectItem value="WEEKLY">Mingguan</SelectItem>

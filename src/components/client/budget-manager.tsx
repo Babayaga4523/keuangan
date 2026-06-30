@@ -149,7 +149,9 @@ export default function BudgetManager({ categories, budgets, transactions, month
                 <Label className="text-xs font-semibold text-slate-500">Kategori Pengeluaran</Label>
                 <Select value={categoryId} onValueChange={(val) => setCategoryId(val || '')}>
                   <SelectTrigger className="border-[#e2e8f0] rounded-lg">
-                    <SelectValue placeholder="Pilih kategori..." />
+                    <SelectValue placeholder="Pilih kategori...">
+                      {categories.find((c) => c.id === categoryId)?.name}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent className="bg-white border border-[#e2e8f0]">
                     {availableCategories.map((cat) => (
