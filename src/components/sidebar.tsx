@@ -34,7 +34,7 @@ export default function Sidebar() {
           <div className="w-8 h-8 bg-black flex items-center justify-center rounded-lg text-white">
             <Landmark className="h-4.5 w-4.5 text-white" />
           </div>
-          <span className="font-sans text-base font-bold tracking-tight text-black">Amanah Finance</span>
+          <span className="font-sans text-base font-bold tracking-tight text-black">Silva & Yoga</span>
         </div>
         <Button 
           variant="ghost" 
@@ -66,7 +66,7 @@ export default function Sidebar() {
               <Landmark className="h-4.5 w-4.5 text-white" />
             </div>
             <div className="flex flex-col">
-              <h1 className="font-sans text-base font-bold tracking-tight leading-tight text-black">Amanah Finance</h1>
+              <h1 className="font-sans text-base font-bold tracking-tight leading-tight text-black">Silva & Yoga</h1>
               <span className="text-[10px] text-[#45464d] font-semibold">Wealth Management</span>
             </div>
           </div>

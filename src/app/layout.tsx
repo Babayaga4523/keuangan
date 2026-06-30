@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Amanah Finance - Personal Finance Management System",
+  title: "Silva & Yoga - Personal Finance Management System",
   description: "Ultimate Precision Financial Management System",
 };
 

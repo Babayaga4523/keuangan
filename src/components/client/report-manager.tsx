@@ -316,7 +316,7 @@ export default function ReportManager({ transactions }: ReportManagerProps) {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `Laporan_Amanah_Finance_${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute('download', `Laporan_Silva_Yoga_${new Date().toISOString().split('T')[0]}.csv`);
       link.click();
     } else {
       alert(`Format ekspor ${format} simulasi berjalan sukses! Berkas sedang dipersiapkan.`);

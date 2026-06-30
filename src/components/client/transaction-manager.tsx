@@ -168,7 +168,7 @@ export default function TransactionManager({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `Amanah_Ledger_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `Silva_Yoga_Ledger_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
