@@ -42,7 +42,8 @@ export default async function TransaksiPage() {
     <TransactionManager 
       initialTransactions={transactions} 
       accounts={accounts} 
-      categories={categories} 
+      categories={categories}
+      profile={profile}
     />
   );
 }

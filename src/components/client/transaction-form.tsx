@@ -39,9 +39,10 @@ interface Category {
 interface TransactionFormProps {
   accounts: Account[];
   categories: Category[];
+  profile?: string;
 }
 
-export default function TransactionForm({ accounts, categories }: TransactionFormProps) {
+export default function TransactionForm({ accounts, categories, profile = 'silva' }: TransactionFormProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -146,9 +147,18 @@ export default function TransactionForm({ accounts, categories }: TransactionFor
       } />
       <DialogContent className="sm:max-w-[425px] border border-[#e2e8f0] bg-white rounded-xl shadow-lg">
         <DialogHeader>
-          <DialogTitle className="text-slate-800 text-lg font-bold">Catat Transaksi Baru</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-slate-800 text-lg font-bold">Catat Transaksi Baru</DialogTitle>
+            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full tracking-wider uppercase ${
+              profile === 'yoga' 
+                ? 'bg-blue-50 text-blue-600 border border-blue-200' 
+                : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+            }`}>
+              {profile === 'yoga' ? '🧘 Yoga' : '🌿 Silva'}
+            </span>
+          </div>
           <DialogDescription className="text-slate-400 text-xs">
-            Masukkan detail transaksi arus kas masuk, keluar, atau transfer antar rekening Anda.
+            Transaksi akan dicatat ke profil <strong>{profile === 'yoga' ? 'Yoga' : 'Silva'}</strong>. Pastikan rekening yang dipilih sudah benar.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">

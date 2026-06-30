@@ -53,12 +53,14 @@ export interface TransactionManagerProps {
   initialTransactions: Transaction[];
   accounts: Account[];
   categories: Category[];
+  profile?: string;
 }
 
 export default function TransactionManager({ 
   initialTransactions, 
   accounts, 
-  categories 
+  categories,
+  profile = 'silva'
 }: TransactionManagerProps) {
   const router = useRouter();
   // Filter States
@@ -192,7 +194,7 @@ export default function TransactionManager({
             <Download className="mr-1.5 h-4 w-4" />
             Ekspor CSV
           </Button>
-          <TransactionForm accounts={accounts} categories={categories} />
+          <TransactionForm accounts={accounts} categories={categories} profile={profile} />
         </div>
       </div>
 
