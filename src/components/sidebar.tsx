@@ -103,11 +103,11 @@ export default function Sidebar() {
           <div className="flex items-center p-2.5 rounded-lg hover:bg-[#eceef0] transition-colors cursor-pointer justify-between">
             <div className="flex items-center space-x-3">
               <div className="w-9 h-9 rounded-full bg-black text-white text-xs font-bold flex items-center justify-center uppercase shrink-0">
-                AR
+                SY
               </div>
               <div className="flex flex-col min-w-0">
-                <p className="text-xs font-bold text-black truncate leading-tight">A. Rahman</p>
-                <p className="text-[10px] text-[#45464d] font-medium truncate">Private Client</p>
+                <p className="text-xs font-bold text-black truncate leading-tight">Silva & Yoga</p>
+                <p className="text-[10px] text-[#45464d] font-medium truncate">Family Account</p>
               </div>
             </div>
             <Settings className="h-4 w-4 text-[#45464d] hover:text-black hover:rotate-45 transition-transform duration-200" />
