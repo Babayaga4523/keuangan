@@ -25,16 +25,16 @@ BEFORE INSERT ON transactions
 FOR EACH ROW
 EXECUTE FUNCTION tr_set_transaction_profile();
 
--- 6. Inisialisasi rekening awal untuk Yoga (agar datanya terpisah)
+-- 6. Inisialisasi rekening awal untuk Yoga
 INSERT INTO accounts (id, name, type, balance, currency, is_active, profile)
 VALUES 
-  ('a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d', 'SeaBank (Yoga)', 'BANK', 2000000.00, 'IDR', true, 'yoga'),
-  ('f6e5d4c3-b2a1-0f9e-8d7c-6b5a4f3e2d1c', 'GoPay (Yoga)', 'BANK', 1000000.00, 'IDR', true, 'yoga')
+  ('6a084c0c-b9b5-4b53-93d3-157dc2095f9c', 'SeaBank (Yoga)', 'BANK', 2000000.00, 'IDR', true, 'yoga'),
+  ('87e6fa89-4081-4202-b258-c5b967ffbb3e', 'GoPay (Yoga)', 'BANK', 1000000.00, 'IDR', true, 'yoga')
 ON CONFLICT (id) DO UPDATE SET balance = EXCLUDED.balance;
 
--- 7. Inisialisasi target tabungan awal untuk Yoga (agar datanya terpisah)
+-- 7. Inisialisasi target tabungan awal untuk Yoga (Tanpa kolom 'icon')
 INSERT INTO saving_goals (id, name, target_amount, current_amount, deadline, profile)
 VALUES 
-  ('12345678-1234-1234-1234-123456789012', 'Dana Darurat (Yoga)', 15000000.00, 2000000.00, '2026-12-31', 'yoga'),
-  ('87654321-4321-4321-4321-210987654321', 'Beli Motor (Yoga)', 25000000.00, 5000000.00, '2027-06-30', 'yoga')
+  ('d4b8f596-f6b9-43c2-a42e-1d54e8cb2f54', 'Dana Darurat (Yoga)', 15000000.00, 2000000.00, '2026-12-31', 'yoga'),
+  ('4f29ea12-9c31-41bb-b02e-6d9b04ab2f34', 'Beli Motor (Yoga)', 25000000.00, 5000000.00, '2027-06-30', 'yoga')
 ON CONFLICT (id) DO NOTHING;
