@@ -290,7 +290,7 @@ export default function RecurringManager({ recurrings, accounts, categories, pro
               const isDue = rec.next_due <= today;
               const amt = parseFloat(String(rec.amount));
               return (
-                <div key={rec.id} className={`px-6 py-4 flex items-center justify-between gap-4 ${isDue ? 'bg-amber-50/30' : ''}`}>
+                <div key={rec.id} className={`px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isDue ? 'bg-amber-50/30' : ''}`}>
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`p-2 rounded-lg shrink-0 ${rec.type === 'INCOME' ? 'bg-emerald-50' : 'bg-red-50'}`}>
                       {rec.type === 'INCOME'
@@ -317,29 +317,31 @@ export default function RecurringManager({ recurrings, accounts, categories, pro
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0">
                     <p className={`text-sm font-bold font-mono ${rec.type === 'INCOME' ? 'text-[#009668]' : 'text-[#ba1a1a]'}`}>
                       {rec.type === 'INCOME' ? '+' : '-'}{formatRupiah(amt)}
                     </p>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={executingId === rec.id}
-                      onClick={() => handleExecute(rec.id)}
-                      className={`h-8 w-8 rounded-lg ${isDue ? 'text-amber-600 hover:bg-amber-50' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
-                      title="Eksekusi sekarang"
-                    >
-                      {executingId === rec.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={deletingId === rec.id}
-                      onClick={() => handleDelete(rec.id)}
-                      className="text-slate-300 hover:text-red-500 hover:bg-red-50 h-8 w-8 rounded-lg"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        disabled={executingId === rec.id}
+                        onClick={() => handleExecute(rec.id)}
+                        className={`h-8 w-8 rounded-lg ${isDue ? 'text-amber-600 hover:bg-amber-50' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                        title="Eksekusi sekarang"
+                      >
+                        {executingId === rec.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        disabled={deletingId === rec.id}
+                        onClick={() => handleDelete(rec.id)}
+                        className="text-slate-300 hover:text-red-500 hover:bg-red-50 h-8 w-8 rounded-lg"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );

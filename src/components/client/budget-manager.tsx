@@ -231,8 +231,8 @@ export default function BudgetManager({ categories, budgets, transactions, month
 
               return (
                 <div key={budget.id} className="px-6 py-4 flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {isOver ? (
                         <AlertCircle className="h-4 w-4 text-[#ba1a1a] shrink-0" />
                       ) : isWarning ? (
@@ -248,7 +248,7 @@ export default function BudgetManager({ categories, budgets, transactions, month
                         <span className="text-[9px] font-bold px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full">HAMPIR HABIS</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
                       <span className="text-xs font-mono text-slate-500">
                         {formatRupiah(spent)} / {formatRupiah(budgetAmt)}
                       </span>
