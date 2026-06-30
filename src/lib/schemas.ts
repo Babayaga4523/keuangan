@@ -48,8 +48,55 @@ export const SavingGoalCreateSchema = z.object({
   deadline:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal harus YYYY-MM-DD').optional(),
 });
 
+// ───────────────────────────────────────────────
+// Schema: Edit Transaksi
+// ───────────────────────────────────────────────
+export const UpdateTransactionSchema = z.object({
+  id:          z.string().uuid('ID transaksi tidak valid'),
+  amount:      z.coerce.number().positive('Jumlah harus lebih dari 0').max(999_999_999, 'Jumlah terlalu besar'),
+  categoryId:  z.string().uuid('ID kategori tidak valid').optional(),
+  description: z.string().max(255, 'Deskripsi maksimal 255 karakter').optional(),
+  date:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal harus YYYY-MM-DD'),
+});
+
+// ───────────────────────────────────────────────
+// Schema: Budget Bulanan
+// ───────────────────────────────────────────────
+export const BudgetSchema = z.object({
+  categoryId: z.string().uuid('ID kategori tidak valid'),
+  amount:     z.coerce.number().positive('Jumlah budget harus lebih dari 0').max(999_999_999),
+  month:      z.coerce.number().int().min(1).max(12),
+  year:       z.coerce.number().int().min(2020),
+});
+
+// ───────────────────────────────────────────────
+// Schema: Recurring Transaction
+// ───────────────────────────────────────────────
+export const RecurringSchema = z.object({
+  accountId:   z.string().uuid('ID akun tidak valid'),
+  categoryId:  z.string().uuid('ID kategori tidak valid').optional(),
+  amount:      z.coerce.number().positive('Jumlah harus lebih dari 0').max(999_999_999),
+  type:        z.enum(['INCOME', 'EXPENSE']),
+  description: z.string().max(255).optional(),
+  frequency:   z.enum(['DAILY', 'WEEKLY', 'MONTHLY']),
+  dayOfMonth:  z.coerce.number().int().min(1).max(28).optional(),
+  nextDue:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal harus YYYY-MM-DD'),
+});
+
+// ───────────────────────────────────────────────
+// Schema: Set Threshold Notifikasi Saldo
+// ───────────────────────────────────────────────
+export const AccountThresholdSchema = z.object({
+  accountId: z.string().uuid('ID akun tidak valid'),
+  threshold: z.coerce.number().min(0, 'Threshold tidak boleh negatif').max(999_999_999),
+});
+
 // Inferred types
-export type TransactionInput     = z.infer<typeof TransactionSchema>;
-export type TransferInput        = z.infer<typeof TransferSchema>;
-export type SavingGoalFundInput  = z.infer<typeof SavingGoalFundSchema>;
-export type SavingGoalCreateInput = z.infer<typeof SavingGoalCreateSchema>;
+export type TransactionInput       = z.infer<typeof TransactionSchema>;
+export type TransferInput          = z.infer<typeof TransferSchema>;
+export type SavingGoalFundInput    = z.infer<typeof SavingGoalFundSchema>;
+export type SavingGoalCreateInput  = z.infer<typeof SavingGoalCreateSchema>;
+export type UpdateTransactionInput = z.infer<typeof UpdateTransactionSchema>;
+export type BudgetInput            = z.infer<typeof BudgetSchema>;
+export type RecurringInput         = z.infer<typeof RecurringSchema>;
+export type AccountThresholdInput  = z.infer<typeof AccountThresholdSchema>;

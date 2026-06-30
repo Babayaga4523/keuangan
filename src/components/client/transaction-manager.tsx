@@ -11,7 +11,8 @@ import {
   ArrowLeftRight,
   Info,
   TrendingUp,
-  Lightbulb
+  Lightbulb,
+  Pencil
 } from 'lucide-react';
 import { actionDeleteTransaction } from '@/lib/actions';
 import { useRouter } from 'next/navigation';
@@ -25,6 +26,7 @@ import {
   SelectValue 
 } from '../ui/select';
 import TransactionForm from './transaction-form';
+import EditTransactionDialog from './edit-transaction-dialog';
 
 export interface Account {
   id: string;
@@ -70,6 +72,7 @@ export default function TransactionManager({
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
   // Client-side filtering
   const filteredTransactions = useMemo(() => {
@@ -179,6 +182,16 @@ export default function TransactionManager({
 
   return (
     <div className="space-y-6">
+      {/* Edit Transaction Dialog */}
+      {editingTx && (
+        <EditTransactionDialog
+          open={!!editingTx}
+          onClose={() => setEditingTx(null)}
+          transaction={editingTx}
+          categories={categories}
+        />
+      )}
+
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#e2e8f0] pb-5">
         <div>
@@ -279,7 +292,7 @@ export default function TransactionManager({
                     <th className="px-6 py-3.5 font-bold">Kategori</th>
                     <th className="px-6 py-3.5 font-bold">Akun</th>
                     <th className="px-6 py-3.5 font-bold text-right">Jumlah</th>
-                    <th className="px-6 py-3.5 w-[60px]"></th>
+                    <th className="px-6 py-3.5 w-[90px]"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e2e8f0] font-medium text-slate-800">
@@ -346,15 +359,28 @@ export default function TransactionManager({
                             </div>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              disabled={deletingId === tx.id}
-                              onClick={() => handleDelete(tx.id)}
-                              className="text-slate-400 hover:text-red-500 hover:bg-red-50 h-7 w-7 rounded-lg"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              {tx.type !== 'TRANSFER' && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setEditingTx(tx)}
+                                  className="text-slate-400 hover:text-blue-500 hover:bg-blue-50 h-7 w-7 rounded-lg"
+                                  title="Edit transaksi"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={deletingId === tx.id}
+                                onClick={() => handleDelete(tx.id)}
+                                className="text-slate-400 hover:text-red-500 hover:bg-red-50 h-7 w-7 rounded-lg"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       );

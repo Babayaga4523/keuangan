@@ -3,7 +3,16 @@
 import { revalidatePath } from 'next/cache';
 import { createServerClient } from './supabase-server';
 import { cookies } from 'next/headers';
-import { TransactionSchema, TransferSchema, SavingGoalFundSchema, SavingGoalCreateSchema } from './schemas';
+import {
+  TransactionSchema,
+  TransferSchema,
+  SavingGoalFundSchema,
+  SavingGoalCreateSchema,
+  UpdateTransactionSchema,
+  BudgetSchema,
+  RecurringSchema,
+  AccountThresholdSchema,
+} from './schemas';
 import type { ActionResult } from '@/types/finance';
 
 // Helper: revalidate semua halaman yang terdampak
@@ -219,5 +228,215 @@ export async function actionDeleteSavingGoal(id: string): Promise<ActionResult> 
   if (error) return { success: false, error: error.message };
 
   revalidateAll();
+  return { success: true, data: undefined };
+}
+
+// ───────────────────────────────────────────────
+// ACTION 8: Edit Transaksi (dengan rollback saldo)
+// ───────────────────────────────────────────────
+export async function actionUpdateTransaction(data: {
+  id: string;
+  amount: number;
+  categoryId?: string;
+  description?: string;
+  date: string;
+}): Promise<ActionResult> {
+  const parsed = UpdateTransactionSchema.safeParse(data);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
+
+  const { id, amount, categoryId, description, date } = parsed.data;
+  const supabase = createServerClient();
+
+  const { error } = await supabase.rpc('fn_update_transaction', {
+    p_tx_id:       id,
+    p_amount:      amount,
+    p_category_id: categoryId ?? null,
+    p_description: description ?? null,
+    p_date:        date,
+  });
+
+  if (error) return { success: false, error: error.message };
+
+  revalidateAll();
+  return { success: true, data: undefined };
+}
+
+// ───────────────────────────────────────────────
+// ACTION 9: Set / Upsert Budget Bulanan
+// ───────────────────────────────────────────────
+export async function actionUpsertBudget(data: {
+  categoryId: string;
+  amount: number;
+  month: number;
+  year: number;
+}): Promise<ActionResult<{ id: string }>> {
+  const parsed = BudgetSchema.safeParse(data);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
+
+  const { categoryId, amount, month, year } = parsed.data;
+  const supabase = createServerClient();
+  const cookieStore = await cookies();
+  const profile = cookieStore.get('current_profile')?.value || 'silva';
+
+  const { data: budget, error } = await supabase
+    .from('budgets')
+    .upsert(
+      { category_id: categoryId, amount, month, year, profile },
+      { onConflict: 'category_id,month,year,profile' }
+    )
+    .select('id')
+    .single();
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath('/budget');
+  revalidatePath('/dashboard');
+  return { success: true, data: { id: budget.id } };
+}
+
+// ───────────────────────────────────────────────
+// ACTION 10: Hapus Budget
+// ───────────────────────────────────────────────
+export async function actionDeleteBudget(id: string): Promise<ActionResult> {
+  if (!id) return { success: false, error: 'ID budget diperlukan' };
+  const supabase = createServerClient();
+
+  const { error } = await supabase.from('budgets').delete().eq('id', id);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath('/budget');
+  revalidatePath('/dashboard');
+  return { success: true, data: undefined };
+}
+
+// ───────────────────────────────────────────────
+// ACTION 11: Buat Recurring Transaction
+// ───────────────────────────────────────────────
+export async function actionCreateRecurring(data: {
+  accountId: string;
+  categoryId?: string;
+  amount: number;
+  type: 'INCOME' | 'EXPENSE';
+  description?: string;
+  frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  dayOfMonth?: number;
+  nextDue: string;
+}): Promise<ActionResult<{ id: string }>> {
+  const parsed = RecurringSchema.safeParse(data);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
+
+  const { accountId, categoryId, amount, type, description, frequency, dayOfMonth, nextDue } = parsed.data;
+  const supabase = createServerClient();
+  const cookieStore = await cookies();
+  const profile = cookieStore.get('current_profile')?.value || 'silva';
+
+  const { data: rec, error } = await supabase
+    .from('recurring_transactions')
+    .insert([{
+      account_id:   accountId,
+      category_id:  categoryId ?? null,
+      amount,
+      type,
+      description:  description ?? null,
+      frequency,
+      day_of_month: dayOfMonth ?? null,
+      next_due:     nextDue,
+      profile,
+    }])
+    .select('id')
+    .single();
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath('/recurring');
+  revalidatePath('/dashboard');
+  return { success: true, data: { id: rec.id } };
+}
+
+// ───────────────────────────────────────────────
+// ACTION 12: Nonaktifkan / Hapus Recurring
+// ───────────────────────────────────────────────
+export async function actionDeleteRecurring(id: string): Promise<ActionResult> {
+  if (!id) return { success: false, error: 'ID recurring diperlukan' };
+  const supabase = createServerClient();
+
+  const { error } = await supabase.from('recurring_transactions').delete().eq('id', id);
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath('/recurring');
+  revalidatePath('/dashboard');
+  return { success: true, data: undefined };
+}
+
+// ───────────────────────────────────────────────
+// ACTION 13: Eksekusi Recurring (buat transaksi nyata)
+// ───────────────────────────────────────────────
+export async function actionExecuteRecurring(id: string): Promise<ActionResult> {
+  if (!id) return { success: false, error: 'ID recurring diperlukan' };
+  const supabase = createServerClient();
+
+  // Ambil data recurring
+  const { data: rec, error: fetchErr } = await supabase
+    .from('recurring_transactions')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (fetchErr || !rec) return { success: false, error: 'Recurring tidak ditemukan' };
+
+  // Buat transaksi nyata
+  const { error: txErr } = await supabase.rpc('fn_create_transaction', {
+    p_account_id:  rec.account_id,
+    p_category_id: rec.category_id,
+    p_amount:      rec.amount,
+    p_type:        rec.type,
+    p_description: rec.description ?? `[Auto] ${rec.description || 'Recurring'}`,
+    p_date:        new Date().toISOString().split('T')[0],
+  });
+
+  if (txErr) return { success: false, error: txErr.message };
+
+  // Hitung next_due berikutnya
+  const currentDue = new Date(rec.next_due);
+  let nextDue: Date;
+  if (rec.frequency === 'DAILY') {
+    nextDue = new Date(currentDue.setDate(currentDue.getDate() + 1));
+  } else if (rec.frequency === 'WEEKLY') {
+    nextDue = new Date(currentDue.setDate(currentDue.getDate() + 7));
+  } else {
+    nextDue = new Date(currentDue.setMonth(currentDue.getMonth() + 1));
+  }
+
+  // Update next_due
+  await supabase
+    .from('recurring_transactions')
+    .update({ next_due: nextDue.toISOString().split('T')[0] })
+    .eq('id', id);
+
+  revalidateAll();
+  return { success: true, data: undefined };
+}
+
+// ───────────────────────────────────────────────
+// ACTION 14: Set Threshold Notifikasi Saldo
+// ───────────────────────────────────────────────
+export async function actionUpdateAccountThreshold(data: {
+  accountId: string;
+  threshold: number;
+}): Promise<ActionResult> {
+  const parsed = AccountThresholdSchema.safeParse(data);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
+
+  const { accountId, threshold } = parsed.data;
+  const supabase = createServerClient();
+
+  const { error } = await supabase
+    .from('accounts')
+    .update({ low_balance_threshold: threshold })
+    .eq('id', accountId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath('/dashboard');
   return { success: true, data: undefined };
 }

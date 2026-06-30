@@ -18,6 +18,8 @@ import { Button } from './ui/button';
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Transaksi', href: '/transaksi', icon: Receipt },
+  { name: 'Budget Bulanan', href: '/budget', icon: BarChart3 },
+  { name: 'Transaksi Berulang', href: '/recurring', icon: Target },
   { name: 'Target Tabungan', href: '/tabungan', icon: Target },
   { name: 'Laporan', href: '/laporan', icon: BarChart3 },
 ];

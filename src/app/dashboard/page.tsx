@@ -14,12 +14,14 @@ import {
   BellRing,
   ChevronRight,
   Wallet,
-  Plus
+  Plus,
+  AlertCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { NetWorthChart, AllocationChart, ForecastChart } from '@/components/client/dashboard-charts';
+import ThresholdSetter from '@/components/client/threshold-setter';
 
 export const revalidate = 0; // Live data
 
@@ -45,8 +47,11 @@ export default async function DashboardPage() {
 
   // Fetch transactions for the last 30 days for running balance sparkline
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const todayStr = now.toISOString().split('T')[0];
+  const monthNum = now.getMonth() + 1;
+  const yearNum = now.getFullYear();
 
-  const [currentMonthRes, recentTxRes] = await Promise.all([
+  const [currentMonthRes, recentTxRes, budgetsRes, recurringRes] = await Promise.all([
     supabase
       .from('transactions')
       .select('*')
@@ -59,11 +64,25 @@ export default async function DashboardPage() {
       .eq('profile', profile)
       .gte('transaction_date', thirtyDaysAgo)
       .lte('transaction_date', now.toISOString().split('T')[0])
-      .order('transaction_date', { ascending: false })
+      .order('transaction_date', { ascending: false }),
+    supabase
+      .from('budgets')
+      .select('*, categories(id, name)')
+      .eq('profile', profile)
+      .eq('month', monthNum)
+      .eq('year', yearNum),
+    supabase
+      .from('recurring_transactions')
+      .select('*, accounts(id, name)')
+      .eq('profile', profile)
+      .eq('is_active', true)
+      .lte('next_due', todayStr)
   ]);
 
   const currentMonthTransactions = currentMonthRes.data || [];
   const recentTransactions = recentTxRes.data || [];
+  const budgets = budgetsRes.data || [];
+  const dueRecurring = recurringRes.data || [];
 
   let totalIncome = 0;
   let totalExpense = 0;
@@ -168,6 +187,35 @@ export default async function DashboardPage() {
     .eq('profile', profile)
     .limit(2);
 
+  // 4. Low balance accounts calculation
+  const lowBalanceAccounts = accounts.filter(
+    (acc) => parseFloat(acc.balance) < (parseFloat(acc.low_balance_threshold) || 0)
+  );
+
+  // 5. Budget warnings calculation
+  const spentByCat: Record<string, number> = {};
+  currentMonthTransactions.forEach((tx) => {
+    if (tx.type === 'EXPENSE' && tx.category_id) {
+      spentByCat[tx.category_id] = (spentByCat[tx.category_id] || 0) + parseFloat(tx.amount);
+    }
+  });
+
+  const budgetWarnings = budgets.map((b) => {
+    const spent = spentByCat[b.category_id] || 0;
+    const limit = parseFloat(b.amount);
+    const pct = limit > 0 ? (spent / limit) * 100 : 0;
+    return {
+      id: b.id,
+      categoryName: b.categories?.name || 'Kategori',
+      spent,
+      limit,
+      pct,
+      isOver: spent > limit,
+      isWarning: pct >= 80 && spent <= limit,
+    };
+  }).filter((w) => w.isOver || w.isWarning);
+
+
   return (
     <div className="space-y-6">
       {/* Top Header/Navbar */}
@@ -195,6 +243,65 @@ export default async function DashboardPage() {
           </div>
         </div>
       </header>
+
+      {/* Warnings & Alerts Grid */}
+      {(lowBalanceAccounts.length > 0 || budgetWarnings.length > 0 || dueRecurring.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Low Balance Accounts warning */}
+          {lowBalanceAccounts.length > 0 && (
+            <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-4 flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-[#ba1a1a] shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-red-900">Saldo Menipis</h4>
+                <ul className="text-xs mt-1 space-y-1 text-red-700">
+                  {lowBalanceAccounts.map(acc => (
+                    <li key={acc.id}>
+                      <strong>{acc.name}</strong>: {formatRupiah(parseFloat(acc.balance))}
+                      <span className="text-[10px] text-red-500 block">Limit: {formatRupiah(parseFloat(acc.low_balance_threshold))}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* Budget Limits warning */}
+          {budgetWarnings.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-4 flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900">Peringatan Budget</h4>
+                <ul className="text-xs mt-1 space-y-1 text-amber-700">
+                  {budgetWarnings.map(w => (
+                    <li key={w.id}>
+                      <strong>{w.categoryName}</strong>: {w.pct.toFixed(0)}% terpakai
+                      <span className="text-[10px] text-amber-500 block">
+                        {w.isOver ? 'Kelebihan budget!' : 'Mendekati batas budget'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* Recurring Due warning */}
+          {dueRecurring.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-xl p-4 flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-blue-900">Jatuh Tempo</h4>
+                <p className="text-xs mt-1 text-blue-700">
+                  Ada <strong>{dueRecurring.length}</strong> transaksi rutin jatuh tempo hari ini.
+                </p>
+                <Link href="/recurring" className="text-[10px] font-bold text-blue-600 underline block mt-1 hover:text-blue-800">
+                  Eksekusi Sekarang →
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Net Worth & Smart Allocation Grid */}
       <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
@@ -386,13 +493,22 @@ export default async function DashboardPage() {
                         <span className="font-bold text-black">{acc.name}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-slate-500 font-medium hidden md:table-cell">Rekening Penyimpanan Aktif</td>
+                    <td className="px-6 py-4 text-slate-500 font-medium hidden md:table-cell">
+                      Limit Alert: {formatRupiah(parseFloat(acc.low_balance_threshold || '0'))}
+                    </td>
                     <td className="px-6 py-4 font-bold text-right font-mono text-black">{formatRupiah(balanceVal)}</td>
                     <td className="px-6 py-4 text-right font-bold font-mono text-[#45464d]">{pct}%</td>
                     <td className="px-6 py-4 hidden sm:table-cell">
-                      <span className="px-2.5 py-0.5 rounded-full bg-[#d0e1fb] text-[#38485d] text-[10px] font-bold">
-                        Aktif
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full bg-[#d0e1fb] text-[#38485d] text-[10px] font-bold">
+                          Aktif
+                        </span>
+                        <ThresholdSetter 
+                          accountId={acc.id} 
+                          accountName={acc.name} 
+                          currentThreshold={parseFloat(acc.low_balance_threshold || '0')} 
+                        />
+                      </div>
                     </td>
                   </tr>
                 );
