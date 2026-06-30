@@ -329,23 +329,23 @@ export default function ReportManager({ transactions, accounts, categories, comp
 
       {/* FILTER ROW (only visible/applied in Overview/Arus Kas tab) */}
       {activeTab === 'overview' && (
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="relative w-full max-w-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="relative w-full md:max-w-xs">
             <Search className="absolute left-3 top-2.5 text-[#45464d] h-4 w-4" />
             <Input
               placeholder="Cari transaksi..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 border-[#e2e8f0] rounded-lg text-xs"
+              className="pl-9 border-[#e2e8f0] rounded-lg text-xs w-full"
             />
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex border border-[#c6c6cd] rounded-lg overflow-hidden shrink-0">
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            <div className="flex border border-[#c6c6cd] rounded-lg overflow-hidden shrink-0 w-full sm:w-auto">
               {(['MTD', 'QTD', 'YTD', 'ALL'] as const).map((range) => (
                 <button
                   key={range}
                   onClick={() => setTimeRange(range)}
-                  className={`px-3 py-1.5 text-xs font-semibold transition-colors
+                  className={`flex-1 sm:flex-initial px-3 py-1.5 text-xs font-semibold transition-colors
                     ${timeRange === range 
                       ? 'bg-black text-white' 
                       : 'bg-white hover:bg-slate-100 text-[#45464d]'
@@ -356,24 +356,24 @@ export default function ReportManager({ transactions, accounts, categories, comp
                 </button>
               ))}
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 w-full sm:w-auto justify-between">
               <Input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-[125px] border-[#e2e8f0] rounded-lg text-xs font-mono"
+                className="w-full sm:w-[125px] border-[#e2e8f0] rounded-lg text-xs font-mono"
               />
-              <span className="text-slate-400 text-xs">-</span>
+              <span className="text-slate-400 text-xs">s/d</span>
               <Input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-[125px] border-[#e2e8f0] rounded-lg text-xs font-mono"
+                className="w-full sm:w-[125px] border-[#e2e8f0] rounded-lg text-xs font-mono"
               />
             </div>
             <button
               onClick={handleExportCSV}
-              className="flex items-center gap-1 px-3 py-1.5 bg-[#f2f4f6] text-[#45464d] hover:bg-[#eceef0] rounded-lg text-xs font-bold transition-all"
+              className="flex items-center justify-center gap-1 px-3 py-1.5 bg-[#f2f4f6] text-[#45464d] hover:bg-[#eceef0] rounded-lg text-xs font-bold transition-all w-full sm:w-auto"
             >
               <Download className="h-3.5 w-3.5" />
               <span>Ekspor</span>

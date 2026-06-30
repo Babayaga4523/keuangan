@@ -237,19 +237,19 @@ export default function TransactionManager({
         {/* Left Column: Filter & Ledger Table (Spans 8 columns) */}
         <div className="lg:col-span-8 space-y-6">
           {/* Filter Bar */}
-          <div className="bg-white border border-[#e2e8f0] p-4 rounded-xl flex flex-wrap items-center gap-4 shadow-[0_1px_2px_rgba(15,23,42,0.02)]">
-            <div className="flex-1 min-w-[200px] relative">
+          <div className="bg-white border border-[#e2e8f0] p-4 rounded-xl grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap items-center gap-3 shadow-[0_1px_2px_rgba(15,23,42,0.02)]">
+            <div className="col-span-1 sm:col-span-2 md:flex-1 min-w-[200px] relative">
               <Search className="absolute left-3 top-2.5 text-[#45464d] h-4 w-4" />
               <Input
                 placeholder="Cari transaksi..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 border-[#e2e8f0] rounded-lg text-xs"
+                className="pl-9 border-[#e2e8f0] rounded-lg text-xs w-full"
               />
             </div>
-            <div className="w-[140px]">
+            <div className="w-full md:w-[140px]">
               <Select value={typeFilter} onValueChange={(val) => setTypeFilter(val || 'ALL')}>
-                <SelectTrigger className="border-[#e2e8f0] rounded-lg text-xs">
+                <SelectTrigger className="border-[#e2e8f0] rounded-lg text-xs w-full">
                   <SelectValue placeholder="Semua Tipe">
                     {typeFilter === 'ALL' ? 'Semua Tipe' : typeFilter === 'INCOME' ? 'Pemasukan' : typeFilter === 'EXPENSE' ? 'Pengeluaran' : 'Transfer'}
                   </SelectValue>
@@ -262,9 +262,9 @@ export default function TransactionManager({
                 </SelectContent>
               </Select>
             </div>
-            <div className="w-[160px]">
+            <div className="w-full md:w-[160px]">
               <Select value={categoryFilter} onValueChange={(val) => setCategoryFilter(val || 'ALL')}>
-                <SelectTrigger className="border-[#e2e8f0] rounded-lg text-xs">
+                <SelectTrigger className="border-[#e2e8f0] rounded-lg text-xs w-full">
                   <SelectValue placeholder="Semua Kategori">
                     {categoryFilter === 'ALL' ? 'Semua Kategori' : categories.find((c) => c.id === categoryFilter)?.name}
                   </SelectValue>
@@ -279,19 +279,19 @@ export default function TransactionManager({
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="w-full md:w-auto flex items-center justify-between gap-2">
               <Input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-[125px] border-[#e2e8f0] rounded-lg text-xs font-mono"
+                className="w-full md:w-[125px] border-[#e2e8f0] rounded-lg text-xs font-mono"
               />
-              <span className="text-slate-400 text-xs">-</span>
+              <span className="text-slate-400 text-xs">s/d</span>
               <Input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-[125px] border-[#e2e8f0] rounded-lg text-xs font-mono"
+                className="w-full md:w-[125px] border-[#e2e8f0] rounded-lg text-xs font-mono"
               />
             </div>
           </div>
