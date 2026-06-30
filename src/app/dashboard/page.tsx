@@ -193,7 +193,7 @@ export default async function DashboardPage() {
       <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
         {/* Net Worth Card (Spans 2 columns) */}
         <div className="md:col-span-2 bg-white border border-[#e2e8f0] rounded-xl p-6 flex flex-col justify-between hover:shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-shadow duration-200">
-          <div className="flex justify-between items-start">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <p className="text-[10px] font-bold text-[#45464d] uppercase tracking-wider mb-1">TOTAL NET WORTH</p>
               <h2 className="text-3xl font-bold tracking-tight font-mono text-black">
@@ -207,14 +207,14 @@ export default async function DashboardPage() {
                 <span className="text-[10px] text-[#45464d]">30 hari terakhir</span>
               </div>
             </div>
-            <div className="flex space-x-2">
-              <Link href="/laporan">
-                <Button variant="outline" size="sm" className="h-8 border-[#c6c6cd] text-xs px-3 rounded-lg">
+            <div className="flex space-x-2 w-full sm:w-auto justify-start sm:justify-end">
+              <Link href="/laporan" className="flex-1 sm:flex-initial">
+                <Button variant="outline" size="sm" className="h-8 w-full border-[#c6c6cd] text-xs px-3 rounded-lg">
                   Laporan
                 </Button>
               </Link>
-              <Link href="/transaksi">
-                <Button size="sm" className="h-8 bg-black hover:bg-black/90 text-white text-xs px-3 rounded-lg font-bold">
+              <Link href="/transaksi" className="flex-1 sm:flex-initial">
+                <Button size="sm" className="h-8 w-full bg-black hover:bg-black/90 text-white text-xs px-3 rounded-lg font-bold">
                   Catat Kas
                 </Button>
               </Link>
@@ -293,19 +293,21 @@ export default async function DashboardPage() {
                   return (
                     <Link key={goal.id} href="/tabungan">
                       <div className="p-3.5 rounded-lg bg-[#f2f4f6] border border-[#e2e8f0] hover:border-black transition-all flex flex-col space-y-2.5 cursor-pointer group">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <div className="p-1.5 bg-white rounded border border-[#e2e8f0] group-hover:bg-black group-hover:text-white transition-all">
-                              <PiggyBank className="h-4 w-4 text-slate-700 group-hover:text-white" />
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center space-x-2.5 min-w-0">
+                            <div className="p-1.5 bg-white rounded border border-[#e2e8f0] shrink-0">
+                              <PiggyBank className="h-4 w-4 text-slate-700" />
                             </div>
-                            <p className="text-xs font-bold text-black">{goal.name}</p>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-black truncate">{goal.name}</p>
+                              <p className="text-[9px] text-[#45464d] font-mono truncate">
+                                {formatRupiah(current)} / {formatRupiah(target)}
+                              </p>
+                            </div>
                           </div>
-                          <span className="text-[10px] font-bold text-[#009668] font-mono">{progress.toFixed(0)}% Selesai</span>
+                          <span className="text-[10px] font-bold text-[#009668] font-mono shrink-0">{progress.toFixed(0)}% Selesai</span>
                         </div>
                         <Progress value={progress} className="h-1.5 bg-slate-200 [&>div]:bg-[#009668]" />
-                        <p className="text-[9px] text-[#45464d] font-medium font-mono">
-                          Terkumpul: {formatRupiah(current)} / {formatRupiah(target)}
-                        </p>
                       </div>
                     </Link>
                   );
@@ -358,10 +360,10 @@ export default async function DashboardPage() {
             <thead className="bg-[#f2f4f6] border-b border-[#e2e8f0] text-[#45464d] font-bold uppercase tracking-wider">
               <tr>
                 <th className="px-6 py-3.5 font-bold">Jenis Rekening</th>
-                <th className="px-6 py-3.5 font-bold">Keterangan</th>
+                <th className="px-6 py-3.5 font-bold hidden md:table-cell">Keterangan</th>
                 <th className="px-6 py-3.5 font-bold text-right">Saldo</th>
                 <th className="px-6 py-3.5 font-bold text-right">Persentase</th>
-                <th className="px-6 py-3.5 font-bold">Status</th>
+                <th className="px-6 py-3.5 font-bold hidden sm:table-cell">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e2e8f0]">
@@ -377,10 +379,10 @@ export default async function DashboardPage() {
                         <span className="font-bold text-black">{acc.name}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-slate-500 font-medium">Rekening Penyimpanan Aktif</td>
+                    <td className="px-6 py-4 text-slate-500 font-medium hidden md:table-cell">Rekening Penyimpanan Aktif</td>
                     <td className="px-6 py-4 font-bold text-right font-mono text-black">{formatRupiah(balanceVal)}</td>
                     <td className="px-6 py-4 text-right font-bold font-mono text-[#45464d]">{pct}%</td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 hidden sm:table-cell">
                       <span className="px-2.5 py-0.5 rounded-full bg-[#d0e1fb] text-[#38485d] text-[10px] font-bold">
                         Aktif
                       </span>
