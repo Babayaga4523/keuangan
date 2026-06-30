@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { NetWorthChart, AllocationChart, ForecastChart } from '@/components/client/dashboard-charts';
 import ThresholdSetter from '@/components/client/threshold-setter';
+import AddAccountDialog from '@/components/client/add-account-dialog';
 
 export const revalidate = 0; // Live data
 
@@ -321,8 +322,9 @@ export default async function DashboardPage() {
                 <span className="text-[10px] text-[#45464d]">30 hari terakhir</span>
               </div>
             </div>
-            <div className="flex space-x-2 w-full sm:w-auto justify-start sm:justify-end">
-              <Link href="/laporan" className="flex-1 sm:flex-initial">
+            <div className="flex items-center space-x-2 w-full sm:w-auto justify-start sm:justify-end">
+              <AddAccountDialog />
+              <Link href="/laporan" className="flex-grow sm:flex-grow-0">
                 <Button variant="outline" size="sm" className="h-8 w-full border-[#c6c6cd] text-xs px-3 rounded-lg">
                   Laporan
                 </Button>

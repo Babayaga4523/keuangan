@@ -10,6 +10,8 @@ export const TransactionSchema = z.object({
   type:        z.enum(['INCOME', 'EXPENSE'], { error: 'Tipe harus INCOME atau EXPENSE' }),
   description: z.string().max(255, 'Deskripsi maksimal 255 karakter').optional(),
   date:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal harus YYYY-MM-DD'),
+  receiptUrl:  z.string().optional(),
+  tags:        z.string().optional(),
 });
 
 // ───────────────────────────────────────────────
@@ -40,6 +42,7 @@ export const SavingGoalFundSchema = z.object({
 
 // ───────────────────────────────────────────────
 // Schema: Buat Target Tabungan Baru
+// ────────────────────────────────────────fn_
 // ───────────────────────────────────────────────
 export const SavingGoalCreateSchema = z.object({
   name:          z.string().min(1, 'Nama target wajib diisi').max(100, 'Nama maksimal 100 karakter'),
@@ -57,6 +60,8 @@ export const UpdateTransactionSchema = z.object({
   categoryId:  z.string().uuid('ID kategori tidak valid').optional(),
   description: z.string().max(255, 'Deskripsi maksimal 255 karakter').optional(),
   date:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal harus YYYY-MM-DD'),
+  receiptUrl:  z.string().optional(),
+  tags:        z.string().optional(),
 });
 
 // ───────────────────────────────────────────────
@@ -91,6 +96,15 @@ export const AccountThresholdSchema = z.object({
   threshold: z.coerce.number().min(0, 'Threshold tidak boleh negatif').max(999_999_999),
 });
 
+// ───────────────────────────────────────────────
+// Schema: Buat Rekening Baru
+// ───────────────────────────────────────────────
+export const AccountCreateSchema = z.object({
+  name:    z.string().min(1, 'Nama rekening wajib diisi').max(100),
+  type:    z.enum(['CASH', 'BANK', 'E_WALLET']),
+  balance: z.coerce.number().min(0, 'Saldo awal tidak boleh negatif'),
+});
+
 // Inferred types
 export type TransactionInput       = z.infer<typeof TransactionSchema>;
 export type TransferInput          = z.infer<typeof TransferSchema>;
@@ -100,3 +114,5 @@ export type UpdateTransactionInput = z.infer<typeof UpdateTransactionSchema>;
 export type BudgetInput            = z.infer<typeof BudgetSchema>;
 export type RecurringInput         = z.infer<typeof RecurringSchema>;
 export type AccountThresholdInput  = z.infer<typeof AccountThresholdSchema>;
+export type AccountCreateInput     = z.infer<typeof AccountCreateSchema>;
+

@@ -56,6 +56,8 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState('');
+  const [tags, setTags] = useState('');
+  const [receiptUrl, setReceiptUrl] = useState<string>('');
 
   // Filter categories by selected transaction type
   const filteredCategories = categories.filter((cat) => cat.type === type);
@@ -66,6 +68,8 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
     setCategoryId('');
     setAmount('');
     setDescription('');
+    setTags('');
+    setReceiptUrl('');
     setDate(new Date().toISOString().split('T')[0]);
     setErrorMsg(null);
   };
@@ -116,6 +120,8 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
           type,
           description: description || undefined,
           date,
+          receiptUrl: receiptUrl || undefined,
+          tags: tags || undefined,
         });
 
         if (!result.success) {
@@ -309,6 +315,50 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
               className="border-[#e2e8f0] rounded-lg"
             />
           </div>
+
+          {/* Tags (Hanya untuk INCOME/EXPENSE) */}
+          {type !== 'TRANSFER' && (
+            <div className="space-y-2">
+              <Label htmlFor="tags" className="text-xs font-semibold text-slate-500">Tag (Pemisah Koma)</Label>
+              <Input
+                id="tags"
+                type="text"
+                placeholder="Contoh: makan, liburan, kerja"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                className="border-[#e2e8f0] rounded-lg"
+              />
+            </div>
+          )}
+
+          {/* Upload Struk (Hanya untuk INCOME/EXPENSE) */}
+          {type !== 'TRANSFER' && (
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-slate-500">Lampirkan Foto Struk</Label>
+              <div className="flex flex-col gap-2">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setReceiptUrl(reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="border-[#e2e8f0] rounded-lg text-xs"
+                />
+                {receiptUrl && (
+                  <div className="relative w-20 h-20 border border-slate-200 rounded overflow-hidden">
+                    <img src={receiptUrl} alt="Preview Struk" className="object-cover w-full h-full" />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Submit Buttons */}
           <div className="flex justify-end space-x-2 pt-4">

@@ -39,6 +39,8 @@ interface EditTransactionDialogProps {
     transaction_date: string;
     description: string | null;
     categories: { id: string; name: string } | null;
+    tags?: string | null;
+    receipt_url?: string | null;
   };
   categories: Category[];
 }
@@ -57,6 +59,8 @@ export default function EditTransactionDialog({
   const [categoryId, setCategoryId] = useState(transaction.categories?.id || '');
   const [description, setDescription] = useState(transaction.description || '');
   const [date, setDate] = useState(transaction.transaction_date);
+  const [tags, setTags] = useState(transaction.tags || '');
+  const [receiptUrl, setReceiptUrl] = useState(transaction.receipt_url || '');
 
   const filteredCategories = categories.filter((c) => c.type === transaction.type);
 
@@ -83,6 +87,8 @@ export default function EditTransactionDialog({
         categoryId: categoryId || undefined,
         description: description || undefined,
         date,
+        tags: tags || undefined,
+        receiptUrl: receiptUrl || undefined,
       });
 
       if (!result.success) {
@@ -181,6 +187,45 @@ export default function EditTransactionDialog({
                 onChange={(e) => setDescription(e.target.value)}
                 className="border-[#e2e8f0] rounded-lg"
               />
+            </div>
+
+            {/* Tags */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-slate-500">Tag (Pemisah Koma)</Label>
+              <Input
+                type="text"
+                placeholder="Contoh: makan, liburan, kerja"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                className="border-[#e2e8f0] rounded-lg"
+              />
+            </div>
+
+            {/* Upload Struk */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-slate-500">Ganti Foto Struk</Label>
+              <div className="flex flex-col gap-2">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setReceiptUrl(reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="border-[#e2e8f0] rounded-lg text-xs"
+                />
+                {receiptUrl && (
+                  <div className="relative w-20 h-20 border border-slate-200 rounded overflow-hidden">
+                    <img src={receiptUrl} alt="Preview Struk" className="object-cover w-full h-full" />
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex justify-end space-x-2 pt-4">

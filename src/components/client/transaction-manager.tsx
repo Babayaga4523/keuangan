@@ -27,6 +27,9 @@ import {
 } from '../ui/select';
 import TransactionForm from './transaction-form';
 import EditTransactionDialog from './edit-transaction-dialog';
+import ImportCSVDialog from './import-csv-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Paperclip } from 'lucide-react';
 
 export interface Account {
   id: string;
@@ -49,6 +52,8 @@ export interface Transaction {
   accounts: { id: string; name: string } | null;
   categories: { id: string; name: string } | null;
   destination_account?: { id: string; name: string } | null;
+  tags?: string | null;
+  receipt_url?: string | null;
 }
 
 export interface TransactionManagerProps {
@@ -73,6 +78,7 @@ export default function TransactionManager({
   const [endDate, setEndDate] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [activeReceiptUrl, setActiveReceiptUrl] = useState<string | null>(null);
 
   // Client-side filtering
   const filteredTransactions = useMemo(() => {
@@ -192,6 +198,20 @@ export default function TransactionManager({
         />
       )}
 
+      {/* Receipt Preview Dialog */}
+      {activeReceiptUrl && (
+        <Dialog open={!!activeReceiptUrl} onOpenChange={(v) => { if (!v) setActiveReceiptUrl(null); }}>
+          <DialogContent className="sm:max-w-[420px] bg-white border border-[#e2e8f0] rounded-xl p-4">
+            <DialogHeader>
+              <DialogTitle className="text-slate-800 text-sm font-bold">Nota / Struk Belanja</DialogTitle>
+            </DialogHeader>
+            <div className="mt-3 border border-slate-200 rounded-lg overflow-hidden flex items-center justify-center bg-slate-50 min-h-[300px]">
+              <img src={activeReceiptUrl} alt="Struk Belanja" className="max-h-[500px] object-contain" />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#e2e8f0] pb-5">
         <div>
@@ -199,6 +219,7 @@ export default function TransactionManager({
           <p className="text-xs text-[#45464d] font-medium">Pemantauan arus kas masuk dan keluar secara presisi real-time.</p>
         </div>
         <div className="flex gap-2 shrink-0">
+          <ImportCSVDialog accounts={accounts} />
           <Button 
             variant="outline" 
             onClick={handleExportCSV}
@@ -328,8 +349,28 @@ export default function TransactionManager({
                           <td className="px-6 py-4 text-[#45464d] whitespace-nowrap font-mono">
                             {formatDate(tx.transaction_date)}
                           </td>
-                          <td className="px-6 py-4 font-bold text-black max-w-[200px] truncate">
-                            {tx.description || <span className="text-slate-400 font-normal italic">Tanpa deskripsi</span>}
+                          <td className="px-6 py-4 font-bold text-black max-w-[240px]">
+                            <div className="flex items-center gap-1.5">
+                              <span className="truncate">{tx.description || <span className="text-slate-400 font-normal italic">Tanpa deskripsi</span>}</span>
+                              {tx.receipt_url && (
+                                <button 
+                                  onClick={() => setActiveReceiptUrl(tx.receipt_url || null)} 
+                                  className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-black shrink-0 transition-all"
+                                  title="Lihat struk belanja"
+                                >
+                                  <Paperclip className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                            {tx.tags && (
+                              <div className="flex flex-wrap gap-1 mt-1 font-normal">
+                                {tx.tags.split(',').map((tag, idx) => (
+                                  <span key={idx} className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[9px] rounded font-semibold font-mono">
+                                    #{tag.trim()}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-4">
                             {tx.categories?.name ? (

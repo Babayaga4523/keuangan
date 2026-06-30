@@ -12,6 +12,7 @@ import {
   BudgetSchema,
   RecurringSchema,
   AccountThresholdSchema,
+  AccountCreateSchema,
 } from './schemas';
 import type { ActionResult } from '@/types/finance';
 
@@ -34,6 +35,8 @@ export async function actionCreateTransaction(data: {
   type: 'INCOME' | 'EXPENSE';
   description?: string;
   date: string;
+  receiptUrl?: string;
+  tags?: string;
 }): Promise<ActionResult<{ id: string }>> {
   const parsed = TransactionSchema.safeParse(data);
 
@@ -41,7 +44,7 @@ export async function actionCreateTransaction(data: {
     return { success: false, error: parsed.error.issues[0].message };
   }
 
-  const { accountId, categoryId, amount, type, description, date } = parsed.data;
+  const { accountId, categoryId, amount, type, description, date, receiptUrl, tags } = parsed.data;
   const supabase = createServerClient();
 
   const { data: txId, error } = await supabase.rpc('fn_create_transaction', {
@@ -54,6 +57,13 @@ export async function actionCreateTransaction(data: {
   });
 
   if (error) return { success: false, error: error.message };
+
+  if (receiptUrl || tags) {
+    await supabase
+      .from('transactions')
+      .update({ receipt_url: receiptUrl || null, tags: tags || null })
+      .eq('id', txId);
+  }
 
   revalidateAll();
   return { success: true, data: { id: txId as string } };
@@ -240,11 +250,13 @@ export async function actionUpdateTransaction(data: {
   categoryId?: string;
   description?: string;
   date: string;
+  receiptUrl?: string;
+  tags?: string;
 }): Promise<ActionResult> {
   const parsed = UpdateTransactionSchema.safeParse(data);
   if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
 
-  const { id, amount, categoryId, description, date } = parsed.data;
+  const { id, amount, categoryId, description, date, receiptUrl, tags } = parsed.data;
   const supabase = createServerClient();
 
   const { error } = await supabase.rpc('fn_update_transaction', {
@@ -256,6 +268,12 @@ export async function actionUpdateTransaction(data: {
   });
 
   if (error) return { success: false, error: error.message };
+
+  // Update receipt_url & tags jika ada perubahan
+  await supabase
+    .from('transactions')
+    .update({ receipt_url: receiptUrl || null, tags: tags || null })
+    .eq('id', id);
 
   revalidateAll();
   return { success: true, data: undefined };
@@ -491,4 +509,63 @@ export async function actionGetComparisonData(): Promise<ActionResult<{
 
   return { success: true, data: res };
 }
+
+// ───────────────────────────────────────────────
+// ACTION 16: Buat Rekening Baru dari UI
+// ───────────────────────────────────────────────
+export async function actionCreateAccount(data: {
+  name: string;
+  type: 'CASH' | 'BANK' | 'E_WALLET';
+  balance: number;
+}): Promise<ActionResult<{ id: string }>> {
+  const parsed = AccountCreateSchema.safeParse(data);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
+
+  const { name, type, balance } = parsed.data;
+  const supabase = createServerClient();
+  const cookieStore = await cookies();
+  const profile = cookieStore.get('current_profile')?.value || 'silva';
+
+  const { data: acc, error } = await supabase
+    .from('accounts')
+    .insert([{ name, type, balance, profile }])
+    .select('id')
+    .single();
+
+  if (error) return { success: false, error: error.message };
+
+  revalidateAll();
+  return { success: true, data: { id: acc.id } };
+}
+
+// ───────────────────────────────────────────────
+// ACTION 17: Import Mutasi dari CSV (Bulk Insert)
+// ───────────────────────────────────────────────
+export async function actionImportCSV(transactionsList: {
+  accountId: string;
+  categoryId?: string;
+  amount: number;
+  type: 'INCOME' | 'EXPENSE';
+  description: string;
+  date: string;
+}[]): Promise<ActionResult> {
+  const supabase = createServerClient();
+
+  // Jalankan bulk inserts secara sekuensial lewat RPC agar saldo tetap ter-update
+  for (const tx of transactionsList) {
+    const { error } = await supabase.rpc('fn_create_transaction', {
+      p_account_id:  tx.accountId,
+      p_category_id: tx.categoryId ?? null,
+      p_amount:      tx.amount,
+      p_type:        tx.type,
+      p_description: `[CSV Import] ${tx.description}`,
+      p_date:        tx.date,
+    });
+    if (error) return { success: false, error: `Gagal mengimpor transaksi: ${error.message}` };
+  }
+
+  revalidateAll();
+  return { success: true, data: undefined };
+}
+
 
