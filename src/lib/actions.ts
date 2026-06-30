@@ -440,3 +440,55 @@ export async function actionUpdateAccountThreshold(data: {
   revalidatePath('/dashboard');
   return { success: true, data: undefined };
 }
+
+// ───────────────────────────────────────────────
+// ACTION 15: Ambil Data Perbandingan Silva vs Yoga
+// ───────────────────────────────────────────────
+export async function actionGetComparisonData(): Promise<ActionResult<{
+  silva: { totalBalance: number; income: number; expense: number };
+  yoga: { totalBalance: number; income: number; expense: number };
+}>> {
+  const supabase = createServerClient();
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+  // Fetch all accounts and current month transactions for both profiles
+  const [accountsRes, txRes] = await Promise.all([
+    supabase.from('accounts').select('profile, balance'),
+    supabase.from('transactions').select('profile, amount, type')
+      .gte('transaction_date', startOfMonth)
+      .lte('transaction_date', endOfMonth)
+  ]);
+
+  if (accountsRes.error) return { success: false, error: accountsRes.error.message };
+  if (txRes.error) return { success: false, error: txRes.error.message };
+
+  const res = {
+    silva: { totalBalance: 0, income: 0, expense: 0 },
+    yoga: { totalBalance: 0, income: 0, expense: 0 }
+  };
+
+  // Sum balances
+  (accountsRes.data || []).forEach(acc => {
+    const bal = parseFloat(acc.balance || '0');
+    if (acc.profile === 'yoga') res.yoga.totalBalance += bal;
+    else res.silva.totalBalance += bal;
+  });
+
+  // Sum monthly flow
+  (txRes.data || []).forEach(tx => {
+    const amt = parseFloat(tx.amount || '0');
+    const isYoga = tx.profile === 'yoga';
+    if (tx.type === 'INCOME') {
+      if (isYoga) res.yoga.income += amt;
+      else res.silva.income += amt;
+    } else if (tx.type === 'EXPENSE') {
+      if (isYoga) res.yoga.expense += amt;
+      else res.silva.expense += amt;
+    }
+  });
+
+  return { success: true, data: res };
+}
+
