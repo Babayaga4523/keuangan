@@ -11,7 +11,8 @@ import {
   Target, 
   BarChart3, 
   Settings, 
-  Landmark 
+  Landmark,
+  Sparkles
 } from 'lucide-react';
 import { Button } from './ui/button';
 
@@ -22,6 +23,7 @@ const navItems = [
   { name: 'Transaksi Berulang', href: '/recurring', icon: Target },
   { name: 'Target Tabungan', href: '/tabungan', icon: Target },
   { name: 'Laporan', href: '/laporan', icon: BarChart3 },
+  { name: 'Simulator Roadmap', href: '/simulator', icon: Sparkles },
 ];
 
 export default function Sidebar() {
