@@ -12,7 +12,8 @@ import {
   BarChart3, 
   Settings, 
   Landmark,
-  Sparkles
+  Sparkles,
+  Bot
 } from 'lucide-react';
 import { Button } from './ui/button';
 
@@ -24,6 +25,7 @@ const navItems = [
   { name: 'Target Tabungan', href: '/tabungan', icon: Target },
   { name: 'Laporan', href: '/laporan', icon: BarChart3 },
   { name: 'Simulator Roadmap', href: '/simulator', icon: Sparkles },
+  { name: 'AI Advisor', href: '/ai-advisor', icon: Bot },
 ];
 
 export default function Sidebar() {
