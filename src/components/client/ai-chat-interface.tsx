@@ -8,7 +8,7 @@ import { Send, User, Bot, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
 
 export default function AiChatInterface() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages } = useChat({
+  const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages, error } = useChat({
     api: '/api/chat',
     initialMessages: []
   });
@@ -105,6 +105,13 @@ export default function AiChatInterface() {
               <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
               <span className="text-xs text-slate-500 font-medium">Berpikir...</span>
             </div>
+          </div>
+        )}
+        {error && (
+          <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl">
+            {error.message.includes('Quota exceeded') || error.message.includes('429') 
+              ? 'Batas penggunaan AI gratis (Google Quota) Anda telah habis karena terlalu banyak request. Mohon tunggu sekitar 1 menit sebelum bertanya lagi.' 
+              : 'Terjadi gangguan koneksi ke server AI. Silakan coba beberapa saat lagi.'}
           </div>
         )}
         <div ref={messagesEndRef} />

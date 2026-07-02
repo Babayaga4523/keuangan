@@ -1,5 +1,5 @@
-import { google } from '@ai-sdk/google';
 import { streamText } from 'ai';
+import { createOpenAI } from '@ai-sdk/openai';
 import { createServerClient } from '@/lib/supabase-server';
 import { cookies } from 'next/headers';
 
@@ -208,12 +208,20 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
     }
 
     // Vercel AI SDK useChat automatically sends the FULL conversation history in `messages`.
-    // We just pass it directly to streamText.
+    // To prevent AI lag and save tokens on very long chats, we only send the last 20 messages for context.
+    const recentMessages = messages.slice(-20);
+
     console.time('AI Stream Connect');
+
+    const groq = createOpenAI({
+      baseURL: 'https://api.groq.com/openai/v1',
+      apiKey: process.env.GROQ_API_KEY,
+    });
+    
     const result = await streamText({
-      model: google('gemini-2.5-flash'), // Revert to 2.5-flash for speed
+      model: groq('llama-3.3-70b-versatile'),
       system: systemPrompt,
-      messages,
+      messages: recentMessages,
       temperature: 0.7,
       onFinish: async ({ text }) => {
         // Save the AI response to database
