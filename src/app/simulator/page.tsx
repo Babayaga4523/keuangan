@@ -9,16 +9,18 @@ export default async function SimulatorPage() {
   const cookieStore = await cookies();
   const profile = cookieStore.get('current_profile')?.value || 'silva';
 
-  // Fetch accounts & active recurring rules
-  const [accountsRes, recurringRes] = await Promise.all([
-    supabase.from('accounts').select('id, name, balance').eq('profile', profile).eq('is_active', true),
-    supabase.from('recurring_transactions').select('*, accounts(name), categories(name)').eq('profile', profile).eq('is_active', true)
+  // Fetch accounts, active recurring rules, and saved simulator config
+  const [accountsRes, recurringRes, configRes] = await Promise.all([
+    supabase.from('accounts').select('id, name, balance').eq('profile', profile).eq('is_active', true).order('name'),
+    supabase.from('recurring_transactions').select('*, accounts(name), categories(name)').eq('profile', profile).eq('is_active', true),
+    supabase.from('simulator_configs').select('*').eq('profile', profile).single()
   ]);
 
   const accounts = accountsRes.data || [];
   const recurringList = recurringRes.data || [];
+  const savedConfig = configRes.data || null;
 
-  // Calculate live total balance
+  // Calculate live total balance (default)
   const liveTotalBalance = accounts.reduce((sum, acc) => sum + parseFloat(acc.balance || '0'), 0);
 
   // Group recurring transactions by type (income vs expense)
@@ -44,6 +46,8 @@ export default async function SimulatorPage() {
       defaultMonthlyIncomes={defaultMonthlyIncomes}
       defaultMonthlyExpenses={defaultMonthlyExpenses}
       profile={profile}
+      accounts={accounts}
+      savedConfig={savedConfig}
     />
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { actionSaveSimulatorConfig } from '@/app/actions/simulator';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -35,6 +36,8 @@ interface SimulatorManagerProps {
   defaultMonthlyIncomes: SimulatedItem[];
   defaultMonthlyExpenses: SimulatedItem[];
   profile: string;
+  accounts?: any[];
+  savedConfig?: any;
 }
 
 const MONTH_LABELS = [
@@ -46,36 +49,47 @@ export default function SimulatorManager({
   liveTotalBalance, 
   defaultMonthlyIncomes, 
   defaultMonthlyExpenses,
-  profile
+  profile,
+  accounts = [],
+  savedConfig = null
 }: SimulatorManagerProps) {
+  const savedState = savedConfig?.state || {};
+
   // Target Dream State
-  const [dreamName, setDreamName] = useState('iPhone 15 Pro');
-  const [dreamCost, setDreamCost] = useState('12.850.000');
-  const [targetMonthOffset, setTargetMonthOffset] = useState(2); // 2 months from now (e.g. August if current is June/July)
+  const [dreamName, setDreamName] = useState(savedState.dreamName || 'Barang Impian');
+  const [dreamCost, setDreamCost] = useState(savedState.dreamCost || '0');
+  const [targetMonthOffset, setTargetMonthOffset] = useState(savedState.targetMonthOffset ?? 2); 
+
+  // Selected Account
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(savedConfig?.selected_account_id || 'all');
 
   // Starting Balance State
-  const [startBalance, setStartBalance] = useState(liveTotalBalance.toLocaleString('id-ID'));
+  const [startBalance, setStartBalance] = useState(savedState.startBalance || liveTotalBalance.toLocaleString('id-ID'));
 
   // Incomes & Expenses List
-  const [incomes, setIncomes] = useState<SimulatedItem[]>([
-    { id: 'inc-1', name: 'Gaji Bulanan', amount: 6000000 },
-    ...defaultMonthlyIncomes
-  ]);
-
-  const [expenses, setExpenses] = useState<SimulatedItem[]>([
-    ...defaultMonthlyExpenses.length > 0 ? defaultMonthlyExpenses : [
-      { id: 'exp-1', name: 'Jatah Nyokap', amount: 500000 },
-      { id: 'exp-2', name: 'Bensin Motor', amount: 300000 },
-      { id: 'exp-3', name: 'Servis Rutin', amount: 150000 },
-      { id: 'exp-4', name: 'BPJS & Kuota', amount: 250000 },
-      { id: 'exp-5', name: 'Gaya Hidup (Silva/Kopi)', amount: 120000 },
-    ]
-  ]);
+  const [incomes, setIncomes] = useState<SimulatedItem[]>(savedState.incomes || defaultMonthlyIncomes);
+  const [expenses, setExpenses] = useState<SimulatedItem[]>(savedState.expenses || defaultMonthlyExpenses);
 
   // One-off payments (Biaya Nombok Sekali Bayar)
-  const [oneOffs, setOneOffs] = useState<SimulatedItem[]>([
-    { id: 'one-1', name: 'Servis Besar Motor (Senin)', amount: 350000 }
-  ]);
+  const [oneOffs, setOneOffs] = useState<SimulatedItem[]>(savedState.oneOffs || []);
+
+  // Auto Save Effect
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      const currentState = {
+        dreamName,
+        dreamCost,
+        targetMonthOffset,
+        startBalance,
+        incomes,
+        expenses,
+        oneOffs
+      };
+      actionSaveSimulatorConfig(currentState, selectedAccountId === 'all' ? null : selectedAccountId);
+    }, 1500);
+
+    return () => clearTimeout(timeout);
+  }, [dreamName, dreamCost, targetMonthOffset, startBalance, incomes, expenses, oneOffs, selectedAccountId, profile]);
 
   // Input states for adding new list items
   const [newIncName, setNewIncName] = useState('');
@@ -144,12 +158,13 @@ export default function SimulatorManager({
       const monthlyIncome = totalInflow;
       const monthlyExpense = totalOutflow;
 
-      // Saldo sebelum eksekusi (atau sebelum gajian periode ini)
-      const balanceBeforeSalary = currentBal - monthlyExpense;
+      // 1. Kas sebelum gajian bulan ini (saldo bawaan dari bulan sebelumnya)
+      const balanceBeforeSalary = currentBal;
       
-      // Saldo setelah gajian
-      const balanceAfterSalary = currentBal + netMonthlySurplus;
+      // 2. Terima gajian di tanggal 25 (Puncak Saldo)
+      const balanceAfterSalary = balanceBeforeSalary + monthlyIncome;
 
+      // 3. Eksekusi pembelian jika bulan target
       let balanceAfterPurchase = balanceAfterSalary;
       let purchaseOccurred = false;
 
@@ -158,34 +173,39 @@ export default function SimulatorManager({
         purchaseOccurred = true;
       }
 
-      currentBal = balanceAfterPurchase;
+      // 4. Saldo Akhir Bulan (setelah dikurangi biaya hidup sebulan penuh)
+      const finalBalance = balanceAfterPurchase - monthlyExpense;
 
-      // Status deteksi saldo kritis / minus
+      // Status deteksi didasarkan pada sisa kas akhir bulan (titik terendah likuiditas sebelum gajian berikutnya)
       let status: 'SAFE' | 'WARNING' | 'CRITICAL' | 'DANGER' = 'SAFE';
       let statusText = 'Aman & Sehat';
 
-      if (balanceBeforeSalary < 0) {
+      if (finalBalance < 0) {
         status = 'DANGER';
         statusText = '🚨 Minus Sebelum Gajian!';
-      } else if (balanceBeforeSalary < 200000) {
+      } else if (finalBalance < 200000) {
         status = 'CRITICAL';
         statusText = '⚠️ Saldo Kritis Sebelum Gajian';
-      } else if (balanceBeforeSalary < 1000000) {
+      } else if (finalBalance < 1000000) {
         status = 'WARNING';
         statusText = 'Keleluasaan Kas Rendah';
       }
 
       monthsTimeline.push({
         monthName: `${MONTH_LABELS[projDate.getMonth()]} ${projDate.getFullYear()}`,
-        startBalance: currentBal + (purchaseOccurred ? dreamAmt : 0) - netMonthlySurplus,
+        startBalance: balanceBeforeSalary,
         netSurplus: netMonthlySurplus,
-        balanceBeforeSalary,
-        balanceAfterSalary,
-        balanceAfterPurchase,
+        balanceBeforeSalary, // Kas sebelum gajian
+        balanceAfterSalary,  // Kas setelah gajian
+        balanceAfterPurchase: finalBalance, // Saldo Akhir Bulan di-map ke key ini agar UI tidak error
         purchaseOccurred,
         status,
-        statusText
+        statusText,
+        finalBalance // Disimpan juga secara eksplisit untuk logic recommendation
       });
+      
+      // Saldo akhir bulan ini menjadi saldo awal bulan depan
+      currentBal = finalBalance;
     }
 
     // Recommendation generator
@@ -193,12 +213,12 @@ export default function SimulatorManager({
     const criticalMonth = monthsTimeline.find(m => m.status === 'CRITICAL' || m.status === 'DANGER');
 
     if (criticalMonth) {
-      if (criticalMonth.balanceBeforeSalary < 0) {
-        const gap = Math.abs(criticalMonth.balanceBeforeSalary);
-        recommendation = `Rencana belanja terhambat! Anda akan mengalami minus sebesar ${formatRupiah(gap)} sebelum gajian bulan ${criticalMonth.monthName}. Disarankan memangkas pengeluaran rutin Anda sebesar ${formatRupiah(Math.ceil(gap / (targetMonthOffset + 1)))}/bulan, atau menunda pembelian target impian selama 1 bulan.`;
+      if (criticalMonth.finalBalance < 0) {
+        const gap = Math.abs(criticalMonth.finalBalance);
+        recommendation = `Rencana belanja terhambat! Anda akan mengalami minus sebesar ${formatRupiah(gap)} sebelum gajian bulan berikutnya. Disarankan memangkas pengeluaran rutin Anda sebesar ${formatRupiah(Math.ceil(gap / (targetMonthOffset + 1)))}/bulan, atau menunda pembelian target impian selama 1 bulan.`;
       } else {
-        const gap = 250000 - criticalMonth.balanceBeforeSalary;
-        recommendation = `Saldo kas pemulihan Anda di akhir periode target sangat mepet (${formatRupiah(criticalMonth.balanceBeforeSalary)}). Kurangi anggaran Gaya Hidup bulanan sebesar ${formatRupiah(Math.ceil(gap))}, atau cari pemasukan sampingan ekstra agar sisa kas pasca pembelian bernilai aman (minimal Rp 250.000).`;
+        const gap = 250000 - criticalMonth.finalBalance;
+        recommendation = `Saldo kas pemulihan Anda di akhir periode target sangat mepet (${formatRupiah(criticalMonth.finalBalance)}). Kurangi anggaran Gaya Hidup bulanan sebesar ${formatRupiah(Math.ceil(gap))}, atau cari pemasukan sampingan ekstra agar sisa kas pasca pembelian bernilai aman (minimal Rp 250.000).`;
       }
     }
 
@@ -261,9 +281,45 @@ export default function SimulatorManager({
               </div>
             </div>
 
-            {/* Harga & Saldo Awal */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Rekening, Harga & Saldo Awal */}
+            <div className="space-y-4">
               <div className="space-y-2">
+                <Label className="text-xs font-semibold text-slate-500">Pilih Rekening Simulasi</Label>
+                <Select 
+                  value={selectedAccountId || 'all'} 
+                  onValueChange={(val) => {
+                    setSelectedAccountId(val);
+                    if (val === 'all') {
+                      setStartBalance(liveTotalBalance.toLocaleString('id-ID'));
+                    } else {
+                      const acc = accounts.find(a => a.id === val);
+                      if (acc) {
+                        setStartBalance(parseFloat(acc.balance).toLocaleString('id-ID'));
+                      }
+                    }
+                  }}
+                >
+                  <SelectTrigger className="border-[#e2e8f0] text-xs w-full truncate">
+                    <SelectValue placeholder="Semua Rekening">
+                      {selectedAccountId === 'all' 
+                        ? 'Total (Semua Rekening)' 
+                        : accounts.find(a => a.id === selectedAccountId)
+                          ? `${accounts.find(a => a.id === selectedAccountId)?.name} - ${formatRupiah(parseFloat(accounts.find(a => a.id === selectedAccountId)?.balance || '0'))}`
+                          : 'Pilih Rekening...'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border border-[#e2e8f0]">
+                    <SelectItem value="all" className="text-xs font-bold text-blue-600">Total (Semua Rekening)</SelectItem>
+                    {accounts.map(acc => (
+                      <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                        {acc.name} - {formatRupiah(parseFloat(acc.balance))}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
                 <Label className="text-xs font-semibold text-slate-500">Harga Barang (Rp)</Label>
                 <Input
                   type="text"
@@ -283,8 +339,9 @@ export default function SimulatorManager({
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Monthly Inflow Section */}
+        {/* Monthly Inflow Section */}
           <div className="bg-white border border-[#e2e8f0] rounded-xl p-5 space-y-4">
             <h3 className="text-xs font-bold text-black uppercase tracking-wider">Pemasukan Bulanan Rutin</h3>
             <div className="space-y-2">
