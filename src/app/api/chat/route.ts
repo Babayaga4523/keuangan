@@ -197,6 +197,16 @@ Tapi sebelum dieksekusi, cek ini dulu:
 Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondisi keuangan kamu mendukung! 🎉' : 'Tunda dulu, atau cari opsi cicilan supaya dana darurat tidak terkuras.'}"
 `;
 
+    const lastUserMessage = messages[messages.length - 1];
+
+    if (lastUserMessage && lastUserMessage.role === 'user') {
+      await supabase.from('chat_messages').insert({
+        profile: profile,
+        role: 'user',
+        content: lastUserMessage.content
+      });
+    }
+
     // Vercel AI SDK useChat automatically sends the FULL conversation history in `messages`.
     // We just pass it directly to streamText.
     console.time('AI Stream Connect');
@@ -205,6 +215,19 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
       system: systemPrompt,
       messages,
       temperature: 0.7,
+      onFinish: async ({ text }) => {
+        // Save the AI response to database
+        try {
+          const finishSupabase = createServerClient();
+          await finishSupabase.from('chat_messages').insert({
+            profile: profile,
+            role: 'assistant',
+            content: text
+          });
+        } catch (err) {
+          console.error('Failed to save AI response:', err);
+        }
+      }
     });
     console.timeEnd('AI Stream Connect');
 

@@ -1,23 +1,48 @@
 'use client';
 
 import { useChat, Message } from 'ai/react';
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Send, User, Bot, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
 
 export default function AiChatInterface() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+  const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages } = useChat({
     api: '/api/chat',
-    initialMessages: [
-      {
-        id: 'welcome',
-        role: 'assistant',
-        content: 'Halo! Saya asisten AI keuangan Anda. Data saldo dan rencana Anda sudah saya baca dengan aman di latar belakang. Ada yang ingin Anda tanyakan atau hitung hari ini?'
-      }
-    ]
+    initialMessages: []
   });
+
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    async function fetchHistory() {
+      try {
+        const res = await fetch('/api/chat/history');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.messages && data.messages.length > 0) {
+            setMessages(data.messages);
+          } else {
+            // Show welcome message if no history
+            setMessages([
+              {
+                id: 'welcome',
+                role: 'assistant',
+                content: 'Halo! Saya Opin, asisten AI keuangan Anda. Data saldo dan rencana Anda sudah saya baca dengan aman di latar belakang. Ada yang ingin Anda tanyakan atau hitung hari ini?'
+              }
+            ]);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load chat history:', err);
+      } finally {
+        setIsInitializing(false);
+      }
+    }
+
+    fetchHistory();
+  }, [setMessages]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -30,10 +55,17 @@ export default function AiChatInterface() {
   }, [messages]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
-      {/* Chat History Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message: Message) => (
+    <div className="flex flex-col h-full bg-slate-50 relative">
+      {isInitializing ? (
+        <div className="flex-1 flex flex-col items-center justify-center space-y-3">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <p className="text-sm text-slate-500">Memuat riwayat obrolan...</p>
+        </div>
+      ) : (
+        <>
+          {/* Chat History Area */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.map((message: Message) => (
           <div
             key={message.id}
             className={`flex items-start gap-3 ${
@@ -110,10 +142,12 @@ export default function AiChatInterface() {
             <Send className="h-4 w-4" />
           </Button>
         </form>
-        <p className="text-[10px] text-center text-slate-400 mt-2">
-          AI dapat melakukan kesalahan. Selalu periksa kembali perhitungan manual jika menyangkut keputusan besar.
-        </p>
-      </div>
+          <p className="text-[10px] text-center text-slate-400 mt-2">
+            AI dapat melakukan kesalahan. Selalu periksa kembali perhitungan manual jika menyangkut keputusan besar.
+          </p>
+        </div>
+        </>
+      )}
     </div>
   );
 }

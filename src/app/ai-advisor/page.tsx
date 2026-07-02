@@ -1,11 +1,15 @@
 import AiChatInterface from '@/components/client/ai-chat-interface';
 import { Bot } from 'lucide-react';
+import { cookies } from 'next/headers';
 
 export const metadata = {
   title: 'AI Advisor - Silva & Yoga Wealth Management',
 };
 
-export default function AiAdvisorPage() {
+export default async function AiAdvisorPage() {
+  const cookieStore = await cookies();
+  const profile = cookieStore.get('current_profile')?.value || 'silva';
+
   return (
     <div className="space-y-6">
       <div>
@@ -19,7 +23,7 @@ export default function AiAdvisorPage() {
       </div>
 
       <div className="bg-white border border-[#e2e8f0] rounded-xl overflow-hidden h-[calc(100vh-12rem)] min-h-[500px]">
-        <AiChatInterface />
+        <AiChatInterface key={profile} />
       </div>
     </div>
   );
