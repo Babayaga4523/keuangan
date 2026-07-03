@@ -136,3 +136,17 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.streaming-caret > *:last-child::after {
+  content: '▊';
+  display: inline-block;
+  margin-left: 4px;
+  animation: blink 0.8s infinite;
+  color: currentColor;
+  vertical-align: middle;
+}

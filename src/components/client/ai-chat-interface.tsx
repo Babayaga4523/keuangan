@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useChat, Message } from 'ai/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, User, Bot, Loader2, RefreshCw, Plus, Trash2, Menu, MessageSquare } from 'lucide-react';
+import { Send, User, Bot, Loader2, RefreshCw, Plus, Trash2, Menu, MessageSquare, ChevronDown } from 'lucide-react';
 import { Button } from '../ui/button';
 
 const generateUUID = () => {
@@ -21,7 +21,7 @@ const SUGGESTIONS = [
   { title: '💡 Saran Hemat Pengeluaran', desc: 'Dapatkan tips hemat konkret berdasarkan transaksi terakhir.', prompt: 'Berikan tips hemat berdasarkan pengeluaran saya.' }
 ];
 
-const MemoizedMessageBubble = React.memo(({ message }: { message: Message }) => {
+const MemoizedMessageBubble = React.memo(({ message, isStreaming }: { message: Message; isStreaming?: boolean }) => {
   const isUser = message.role === 'user';
   const timeLabel = isUser ? 'You • Baru saja' : 'Opin AI • Baru saja';
 
@@ -40,9 +40,9 @@ const MemoizedMessageBubble = React.memo(({ message }: { message: Message }) => 
       </div>
 
       {/* Bubble Container */}
-      <div className={`flex-1 flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+      <div className={`flex-1 flex flex-col min-w-0 ${isUser ? 'items-end' : 'items-start'}`}>
         <div
-          className={`rounded-xl p-4 sm:p-5 text-[13px] sm:text-[14px] leading-relaxed max-w-[85%] transition-all ${
+          className={`rounded-xl p-4 sm:p-5 text-[13px] sm:text-[14px] leading-relaxed w-full max-w-[85%] min-w-0 transition-all ${
             isUser
               ? 'bg-black text-white rounded-tr-none hover:shadow-xs'
               : 'bg-[#f8fafc] border border-slate-200/65 text-[#191c1e] rounded-tl-none hover:shadow-xs'
@@ -51,7 +51,7 @@ const MemoizedMessageBubble = React.memo(({ message }: { message: Message }) => 
           {isUser ? (
             <p className="whitespace-pre-wrap">{message.content}</p>
           ) : (
-            <div className="markdown-body">
+            <div className={`markdown-body w-full overflow-hidden min-w-0 ${isStreaming ? 'streaming-caret' : ''}`}>
               <ReactMarkdown 
                 remarkPlugins={[remarkGfm]}
                 components={{
@@ -75,8 +75,8 @@ const MemoizedMessageBubble = React.memo(({ message }: { message: Message }) => 
                       : <pre className="bg-slate-900 text-slate-100 p-4 rounded-xl overflow-x-auto text-[11px] my-3.5 shadow-sm border border-slate-800"><code {...props}>{children}</code></pre>;
                   },
                   table: ({node, ...props}) => (
-                    <div className="overflow-x-auto my-3 rounded-xl border border-slate-200 bg-white">
-                      <table className="w-full text-left border-collapse" {...props} />
+                    <div className="w-full overflow-x-auto my-3 rounded-xl border border-slate-200 bg-white">
+                      <table className="w-full text-left border-collapse min-w-[500px]" {...props} />
                     </div>
                   ),
                   th: ({node, ...props}) => <th className="bg-slate-50 font-bold p-2.5 text-xs text-black border-b border-slate-200" {...props} />,
@@ -94,7 +94,7 @@ const MemoizedMessageBubble = React.memo(({ message }: { message: Message }) => 
       </div>
     </div>
   );
-}, (prevProps, nextProps) => prevProps.message.content === nextProps.message.content && prevProps.message.role === nextProps.message.role);
+}, (prevProps, nextProps) => prevProps.message.content === nextProps.message.content && prevProps.message.role === nextProps.message.role && prevProps.isStreaming === nextProps.isStreaming);
 
 export default function AiChatInterface() {
   const [currentSessionId, setCurrentSessionId] = useState<string>('default');
@@ -109,7 +109,9 @@ export default function AiChatInterface() {
   });
 
   const [isInitializing, setIsInitializing] = useState(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatCanvasRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const fetchSessions = async () => {
@@ -131,6 +133,7 @@ export default function AiChatInterface() {
       if (res.ok) {
         const data = await res.json();
         setMessages(data.messages || []);
+        setTimeout(scrollToBottom, 100);
       }
     } catch (err) {
       console.error('Failed to load session messages:', err);
@@ -147,6 +150,7 @@ export default function AiChatInterface() {
           const data = await res.json();
           if (data.messages && data.messages.length > 0) {
             setMessages(data.messages);
+            setTimeout(scrollToBottom, 100);
           } else {
             // Show welcome message if no history
             setMessages([
@@ -170,7 +174,19 @@ export default function AiChatInterface() {
   }, [setMessages]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatCanvasRef.current) {
+      chatCanvasRef.current.scrollTop = chatCanvasRef.current.scrollHeight;
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+    }
+  };
+
+  const handleScroll = () => {
+    if (!chatCanvasRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatCanvasRef.current;
+    // Show button if user scrolled up by more than 300px from the bottom
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 300;
+    setShowScrollButton(!isNearBottom);
   };
 
   useEffect(() => {
@@ -300,7 +316,7 @@ export default function AiChatInterface() {
       )}
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-white">
+      <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-white relative">
         {/* Top App Bar */}
         <header className="h-16 border-b border-[#c6c6cd] px-4 sm:px-6 flex items-center justify-between sticky top-0 z-10 bg-white/85 backdrop-blur-md shrink-0">
           <div className="flex items-center gap-3">
@@ -341,7 +357,7 @@ export default function AiChatInterface() {
         ) : (
           <>
             {/* Chat Canvas */}
-            <section className="flex-1 overflow-y-auto p-6 bg-white scrollbar-hide flex flex-col justify-start">
+            <section ref={chatCanvasRef} onScroll={handleScroll} className="flex-1 overflow-y-auto w-full min-w-0 p-6 bg-white scrollbar-hide flex flex-col justify-start">
               {showSuggestions ? (
                 /* Centered Welcome Page (ChatGPT Style) */
                 <div className="flex-1 flex flex-col items-center justify-center max-w-3xl mx-auto px-4 py-8 sm:py-16 w-full my-auto">
@@ -384,8 +400,12 @@ export default function AiChatInterface() {
               ) : (
                 /* Chat Message List */
                 <div className="max-w-4xl mx-auto space-y-6 w-full">
-                  {messages.map((message: Message) => (
-                    <MemoizedMessageBubble key={message.id} message={message} />
+                  {messages.map((message: Message, idx: number) => (
+                    <MemoizedMessageBubble 
+                      key={message.id} 
+                      message={message} 
+                      isStreaming={isLoading && idx === messages.length - 1 && message.role === 'assistant'}
+                    />
                   ))}
                   
                   {isLoading && messages[messages.length - 1]?.role === 'user' && (
@@ -413,6 +433,21 @@ export default function AiChatInterface() {
                 </div>
               )}
             </section>
+
+            {/* Floating Scroll-to-Bottom Button */}
+            {showScrollButton && (
+              <button
+                type="button"
+                onClick={() => {
+                  scrollToBottom();
+                  setShowScrollButton(false);
+                }}
+                className="absolute bottom-28 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-4 py-2 rounded-full bg-black text-white hover:bg-black/90 active:scale-95 shadow-md border border-slate-800 text-[11px] font-bold tracking-wide transition-all animate-bounce"
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+                <span>Pesan Terbaru</span>
+              </button>
+            )}
 
             {/* Message Input Area */}
             <footer className="p-6 border-t border-[#c6c6cd] bg-white shrink-0">
