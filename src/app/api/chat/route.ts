@@ -296,305 +296,322 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
       apiKey: process.env.GITHUB_PAT || '',
     });
 
-    const result = await streamText({
-      model: githubOpenAI('gpt-4o'),
-      system: systemPrompt + '\n\n**PENTING**: Pikirkan langkah demi langkah secara logis sebelum memberikan jawaban yang melibatkan angka atau perhitungan. Jika pengguna meminta untuk mencatat transaksi keuangan, gunakan `add_transaction`. Jika pengguna meminta transfer saldo, gunakan `create_transfer`. Jika pengguna meminta target tabungan baru, gunakan `add_saving_goal`. Panggil alat-alat ini secara otonom tanpa perlu meminta konfirmasi ulang.',
-      messages: recentMessages,
-      temperature: 0.2,
-      tools: {
-        add_transaction: tool({
-          description: 'Tambahkan transaksi pengeluaran atau pemasukan baru ke database pengguna. Gunakan ini secara otomatis jika pengguna menyebutkan pengeluaran atau pemasukan tanpa harus meminta persetujuan berulang.',
-          parameters: jsonSchema({
-            type: 'object',
-            properties: {
-              amount: { 
-                type: 'number', 
-                description: 'Jumlah uang transaksi (harus angka positif tanpa pemisah ribuan).' 
-              },
-              type: { 
-                type: 'string', 
-                enum: ['INCOME', 'EXPENSE'], 
-                description: 'Jenis transaksi: INCOME untuk pemasukan, EXPENSE untuk pengeluaran.' 
-              },
-              description: { 
-                type: 'string', 
-                description: 'Deskripsi singkat transaksi, misalnya "Beli kopi", "Gaji bulanan".' 
-              },
-              category: { 
-                type: 'string', 
-                description: 'Kategori transaksi. Untuk EXPENSE: Makanan, Transportasi, Hiburan, Tagihan, Belanja, Utang, Lainnya. Untuk INCOME: Gaji, Bisnis, Investasi, Lainnya.' 
-              },
-              accountName: {
-                type: 'string',
-                description: 'Nama rekening yang disebutkan oleh pengguna (misalnya "Gopay", "BCA", "Cash", dll). Biarkan kosong jika tidak disebutkan.'
-              },
-              date: { 
-                type: 'string', 
-                description: 'Tanggal transaksi dalam format YYYY-MM-DD. Jika tidak ada konteks tanggal dari pengguna, biarkan kosong untuk menggunakan hari ini.' 
-              }
-            },
-            required: ['amount', 'type', 'description', 'category']
-          }),
-          execute: async ({ amount, type, description, category, accountName, date }: any) => {
-            try {
-              const targetDate = date || new Date().toISOString().split('T')[0];
-              const executeSupabase = createServerClient();
-              
-              // 1. Fetch accounts and categories
-              const [accRes, catRes] = await Promise.all([
-                executeSupabase.from('accounts').select('id, name, type').eq('profile', profile).eq('is_active', true),
-                executeSupabase.from('categories').select('id, name, type')
-              ]);
+    const systemInstructions = systemPrompt + '\n\n**PENTING**: Pikirkan langkah demi langkah secara logis sebelum memberikan jawaban yang melibatkan angka atau perhitungan. Jika pengguna meminta untuk mencatat transaksi keuangan, gunakan `add_transaction`. Jika pengguna meminta transfer saldo, gunakan `create_transfer`. Jika pengguna meminta target tabungan baru, gunakan `add_saving_goal`. Panggil alat-alat ini secara otonom tanpa perlu meminta konfirmasi ulang.';
 
-              if (accRes.error || !accRes.data || accRes.data.length === 0) {
-                return { success: false, error: 'Tidak ditemukan rekening aktif untuk mencatat transaksi.' };
-              }
-              
-              const dbAccounts = accRes.data;
-              const dbCategories = catRes.data || [];
-
-              // 2. Match Account ID
-              let accountId = '';
-              const searchAccount = (accountName || '').toLowerCase();
-              const descLower = (description || '').toLowerCase();
-              
-              let matchedAccount = null;
-              if (searchAccount) {
-                matchedAccount = dbAccounts.find(acc => 
-                  acc.name.toLowerCase().includes(searchAccount) || 
-                  searchAccount.includes(acc.name.toLowerCase())
-                );
-              }
-              
-              if (!matchedAccount) {
-                // Fallback to description matching
-                matchedAccount = dbAccounts.find(acc => 
-                  descLower.includes(acc.name.toLowerCase()) || 
-                  acc.name.toLowerCase().includes(descLower)
-                );
-              }
-              
-              if (matchedAccount) {
-                accountId = matchedAccount.id;
-              } else {
-                const defaultAcc = dbAccounts.find(acc => acc.type === 'CASH') || 
-                                   dbAccounts.find(acc => acc.type === 'BANK') || 
-                                   dbAccounts[0];
-                accountId = defaultAcc.id;
-              }
-
-              // 3. Match Category ID
-              let categoryId: string | null = null;
-              const aiCategoryLower = (category || '').toLowerCase();
-              const typedCategories = dbCategories.filter(cat => cat.type === type);
-              
-              const matchedCategory = typedCategories.find(cat => 
-                cat.name.toLowerCase().includes(aiCategoryLower) || 
-                aiCategoryLower.includes(cat.name.toLowerCase())
-              );
-
-              if (matchedCategory) {
-                categoryId = matchedCategory.id;
-              } else {
-                const fallbackCategory = typedCategories.find(cat => cat.name.toLowerCase().includes('lain')) ||
-                                         typedCategories[0];
-                categoryId = fallbackCategory ? fallbackCategory.id : null;
-              }
-
-              // 4. Call fn_create_transaction RPC
-              const { data: txId, error: rpcError } = await executeSupabase.rpc('fn_create_transaction', {
-                p_account_id: accountId,
-                p_category_id: categoryId,
-                p_amount: amount,
-                p_type: type,
-                p_description: description || null,
-                p_date: targetDate
-              });
-
-              if (rpcError) {
-                console.error('RPC Error inserting transaction:', rpcError);
-                return { success: false, error: rpcError.message };
-              }
-              
-              const finalAccName = dbAccounts.find(a => a.id === accountId)?.name || 'Rekening';
-              
-              return { 
-                success: true, 
-                message: `Berhasil mencatat ${type === 'INCOME' ? 'Pemasukan' : 'Pengeluaran'} "${description}" sejumlah Rp ${amount.toLocaleString('id-ID')} pada rekening "${finalAccName}". Sampaikan konfirmasi ini kepada pengguna dengan ramah.`,
-                data: { txId }
-              };
-            } catch (err: any) {
-              return { success: false, error: err.message };
-            }
-          }
-        }),
-
-        add_saving_goal: tool({
-          description: 'Tambahkan target tabungan baru (saving goal) ke database.',
-          parameters: jsonSchema({
-            type: 'object',
-            properties: {
-              name: { 
-                type: 'string', 
-                description: 'Nama target tabungan (misal: "Beli iPhone 15", "Dana Darurat").' 
-              },
-              targetAmount: { 
-                type: 'number', 
-                description: 'Jumlah uang target yang ingin dicapai (harus angka positif).' 
-              },
-              currentAmount: { 
-                type: 'number', 
-                description: 'Saldo awal tabungan saat ini jika ada (angka positif, opsional).' 
-              },
-              deadline: { 
-                type: 'string', 
-                description: 'Tanggal tenggat waktu target dalam format YYYY-MM-DD (opsional).' 
-              }
-            },
-            required: ['name', 'targetAmount']
-          }),
-          execute: async ({ name, targetAmount, currentAmount, deadline }: any) => {
-            try {
-              const executeSupabase = createServerClient();
-              const { data: goal, error } = await executeSupabase
-                .from('saving_goals')
-                .insert([{
-                  name,
-                  target_amount: targetAmount,
-                  current_amount: currentAmount || 0,
-                  deadline: deadline || null,
-                  profile
-                }])
-                .select('id')
-                .single();
-
-              if (error) {
-                console.error('Error inserting saving goal:', error);
-                return { success: false, error: error.message };
-              }
-
-              return { 
-                success: true, 
-                message: `Berhasil membuat target tabungan baru bernama "${name}" dengan target Rp ${targetAmount.toLocaleString('id-ID')}. Sampaikan konfirmasi ini kepada pengguna dengan ramah.`,
-                data: { goalId: goal.id }
-              };
-            } catch (err: any) {
-              return { success: false, error: err.message };
-            }
-          }
-        }),
-
-        create_transfer: tool({
-          description: 'Lakukan transfer saldo antar rekening (memotong dari satu rekening dan menambahkan ke rekening lain).',
-          parameters: jsonSchema({
-            type: 'object',
-            properties: {
-              fromAccount: { 
-                type: 'string', 
-                description: 'Nama rekening sumber pengirim saldo (misalnya "SeaBank", "Cash").' 
-              },
-              toAccount: { 
-                type: 'string', 
-                description: 'Nama rekening tujuan penerima saldo (misalnya "Gopay", "BCA").' 
-              },
-              amount: { 
-                type: 'number', 
-                description: 'Jumlah saldo yang ditransfer (harus angka positif).' 
-              },
-              description: { 
-                type: 'string', 
-                description: 'Catatan singkat transfer (opsional).' 
-              },
-              date: { 
-                type: 'string', 
-                description: 'Tanggal transfer YYYY-MM-DD (opsional).' 
-              }
-            },
-            required: ['fromAccount', 'toAccount', 'amount']
-          }),
-          execute: async ({ fromAccount, toAccount, amount, description, date }: any) => {
-            try {
-              const targetDate = date || new Date().toISOString().split('T')[0];
-              const executeSupabase = createServerClient();
-              
-              // Fetch accounts
-              const { data: dbAccounts, error: accErr } = await executeSupabase
-                .from('accounts')
-                .select('id, name')
-                .eq('profile', profile)
-                .eq('is_active', true);
-
-              if (accErr || !dbAccounts || dbAccounts.length < 2) {
-                return { success: false, error: 'Rekening tidak cukup aktif untuk melakukan transfer.' };
-              }
-
-              // Match source account
-              const fromLower = fromAccount.toLowerCase();
-              const matchedFrom = dbAccounts.find(acc => 
-                acc.name.toLowerCase().includes(fromLower) || 
-                fromLower.includes(acc.name.toLowerCase())
-              );
-
-              // Match destination account
-              const toLower = toAccount.toLowerCase();
-              const matchedTo = dbAccounts.find(acc => 
-                acc.name.toLowerCase().includes(toLower) || 
-                toLower.includes(acc.name.toLowerCase())
-              );
-
-              if (!matchedFrom || !matchedTo) {
-                return { 
-                  success: false, 
-                  error: `Rekening tidak ditemukan. (Pengirim: ${matchedFrom ? 'Ditemukan' : 'Tidak Ditemukan'}, Penerima: ${matchedTo ? 'Ditemukan' : 'Tidak Ditemukan'})` 
-                };
-              }
-
-              if (matchedFrom.id === matchedTo.id) {
-                return { success: false, error: 'Rekening sumber dan rekening tujuan tidak boleh sama.' };
-              }
-
-              // Call fn_create_transfer RPC
-              const { data: txId, error: rpcError } = await executeSupabase.rpc('fn_create_transfer', {
-                p_from_account_id: matchedFrom.id,
-                p_to_account_id:   matchedTo.id,
-                p_amount:          amount,
-                p_description:     description || null,
-                p_date:            targetDate
-              });
-
-              if (rpcError) {
-                console.error('RPC Error creating transfer:', rpcError);
-                return { success: false, error: rpcError.message };
-              }
-
-              return { 
-                success: true, 
-                message: `Berhasil melakukan transfer dari rekening "${matchedFrom.name}" ke "${matchedTo.name}" sebesar Rp ${amount.toLocaleString('id-ID')}. Sampaikan konfirmasi ini kepada pengguna dengan ramah.`,
-                data: { txId }
-              };
-            } catch (err: any) {
-              return { success: false, error: err.message };
-            }
-          }
-        })
-      },
-      onFinish: async ({ text }) => {
-        // Save the AI response to database
-        try {
-          if (!text || text.trim() === '') return; // Skip saving if text is empty (e.g. intermediate tool calls)
-          
-          const finishSupabase = createServerClient();
-          await finishSupabase.from('chat_messages').insert({
-            profile: profile,
-            role: 'assistant',
-            content: text,
-            session_id: sessionId || 'default'
-          });
-        } catch (err) {
-          console.error('Failed to save AI response:', err);
-        }
+    const onFinishCallback = async ({ text }: any) => {
+      try {
+        if (!text || text.trim() === '') return;
+        const finishSupabase = createServerClient();
+        await finishSupabase.from('chat_messages').insert({
+          profile: profile,
+          role: 'assistant',
+          content: text,
+          session_id: sessionId || 'default'
+        });
+      } catch (err) {
+        console.error('Failed to save AI response:', err);
       }
-    });
+    };
+
+    const chatTools = {
+      add_transaction: tool({
+        description: 'Tambahkan transaksi pengeluaran atau pemasukan baru ke database pengguna. Gunakan ini secara otomatis jika pengguna menyebutkan pengeluaran atau pemasukan tanpa harus meminta persetujuan berulang.',
+        parameters: jsonSchema({
+          type: 'object',
+          properties: {
+            amount: { 
+              type: 'number', 
+              description: 'Jumlah uang transaksi (harus angka positif tanpa pemisah ribuan).' 
+            },
+            type: { 
+              type: 'string', 
+              enum: ['INCOME', 'EXPENSE'], 
+              description: 'Jenis transaksi: INCOME untuk pemasukan, EXPENSE untuk pengeluaran.' 
+            },
+            description: { 
+              type: 'string', 
+              description: 'Deskripsi singkat transaksi, misalnya "Beli kopi", "Gaji bulanan".' 
+            },
+            category: { 
+              type: 'string', 
+              description: 'Kategori transaksi. Untuk EXPENSE: Makanan, Transportasi, Hiburan, Tagihan, Belanja, Utang, Lainnya. Untuk INCOME: Gaji, Bisnis, Investasi, Lainnya.' 
+            },
+            accountName: {
+              type: 'string',
+              description: 'Nama rekening yang disebutkan oleh pengguna (misalnya "Gopay", "BCA", "Cash", dll). Biarkan kosong jika tidak disebutkan.'
+            },
+            date: { 
+              type: 'string', 
+              description: 'Tanggal transaksi dalam format YYYY-MM-DD. Jika tidak ada konteks tanggal dari pengguna, biarkan kosong untuk menggunakan hari ini.' 
+            }
+          },
+          required: ['amount', 'type', 'description', 'category']
+        }),
+        execute: async ({ amount, type, description, category, accountName, date }: any) => {
+          try {
+            const targetDate = date || new Date().toISOString().split('T')[0];
+            const executeSupabase = createServerClient();
+            
+            // 1. Fetch accounts and categories
+            const [accRes, catRes] = await Promise.all([
+              executeSupabase.from('accounts').select('id, name, type').eq('profile', profile).eq('is_active', true),
+              executeSupabase.from('categories').select('id, name, type')
+            ]);
+
+            if (accRes.error || !accRes.data || accRes.data.length === 0) {
+              return { success: false, error: 'Tidak ditemukan rekening aktif untuk mencatat transaksi.' };
+            }
+            
+            const dbAccounts = accRes.data;
+            const dbCategories = catRes.data || [];
+
+            // 2. Match Account ID
+            let accountId = '';
+            const searchAccount = (accountName || '').toLowerCase();
+            const descLower = (description || '').toLowerCase();
+            
+            let matchedAccount = null;
+            if (searchAccount) {
+              matchedAccount = dbAccounts.find(acc => 
+                acc.name.toLowerCase().includes(searchAccount) || 
+                searchAccount.includes(acc.name.toLowerCase())
+              );
+            }
+            
+            if (!matchedAccount) {
+              // Fallback to description matching
+              matchedAccount = dbAccounts.find(acc => 
+                descLower.includes(acc.name.toLowerCase()) || 
+                acc.name.toLowerCase().includes(descLower)
+              );
+            }
+            
+            if (matchedAccount) {
+              accountId = matchedAccount.id;
+            } else {
+              const defaultAcc = dbAccounts.find(acc => acc.type === 'CASH') || 
+                                 dbAccounts.find(acc => acc.type === 'BANK') || 
+                                 dbAccounts[0];
+              accountId = defaultAcc.id;
+            }
+
+            // 3. Match Category ID
+            let categoryId: string | null = null;
+            const aiCategoryLower = (category || '').toLowerCase();
+            const typedCategories = dbCategories.filter(cat => cat.type === type);
+            
+            const matchedCategory = typedCategories.find(cat => 
+              cat.name.toLowerCase().includes(aiCategoryLower) || 
+              aiCategoryLower.includes(cat.name.toLowerCase())
+            );
+
+            if (matchedCategory) {
+              categoryId = matchedCategory.id;
+            } else {
+              const fallbackCategory = typedCategories.find(cat => cat.name.toLowerCase().includes('lain')) ||
+                                       typedCategories[0];
+              categoryId = fallbackCategory ? fallbackCategory.id : null;
+            }
+
+            // 4. Call fn_create_transaction RPC
+            const { data: txId, error: rpcError } = await executeSupabase.rpc('fn_create_transaction', {
+              p_account_id: accountId,
+              p_category_id: categoryId,
+              p_amount: amount,
+              p_type: type,
+              p_description: description || null,
+              p_date: targetDate
+            });
+
+            if (rpcError) {
+              console.error('RPC Error inserting transaction:', rpcError);
+              return { success: false, error: rpcError.message };
+            }
+            
+            const finalAccName = dbAccounts.find(a => a.id === accountId)?.name || 'Rekening';
+            
+            return { 
+              success: true, 
+              message: `Berhasil mencatat ${type === 'INCOME' ? 'Pemasukan' : 'Pengeluaran'} "${description}" sejumlah Rp ${amount.toLocaleString('id-ID')} pada rekening "${finalAccName}". Sampaikan konfirmasi ini kepada pengguna dengan ramah.`,
+              data: { txId }
+            };
+          } catch (err: any) {
+            return { success: false, error: err.message };
+          }
+        }
+      }),
+
+      add_saving_goal: tool({
+        description: 'Tambahkan target tabungan baru (saving goal) ke database.',
+        parameters: jsonSchema({
+          type: 'object',
+          properties: {
+            name: { 
+              type: 'string', 
+              description: 'Nama target tabungan (misal: "Beli iPhone 15", "Dana Darurat").' 
+            },
+            targetAmount: { 
+              type: 'number', 
+              description: 'Jumlah uang target yang ingin dicapai (harus angka positif).' 
+            },
+            currentAmount: { 
+              type: 'number', 
+              description: 'Saldo awal tabungan saat ini jika ada (angka positif, opsional).' 
+            },
+            deadline: { 
+              type: 'string', 
+              description: 'Tanggal tenggat waktu target dalam format YYYY-MM-DD (opsional).' 
+            }
+          },
+          required: ['name', 'targetAmount']
+        }),
+        execute: async ({ name, targetAmount, currentAmount, deadline }: any) => {
+          try {
+            const executeSupabase = createServerClient();
+            const { data: goal, error } = await executeSupabase
+              .from('saving_goals')
+              .insert([{
+                name,
+                target_amount: targetAmount,
+                current_amount: currentAmount || 0,
+                deadline: deadline || null,
+                profile
+              }])
+              .select('id')
+              .single();
+
+            if (error) {
+              console.error('Error inserting saving goal:', error);
+              return { success: false, error: error.message };
+            }
+
+            return { 
+              success: true, 
+              message: `Berhasil membuat target tabungan baru bernama "${name}" dengan target Rp ${targetAmount.toLocaleString('id-ID')}. Sampaikan konfirmasi ini kepada pengguna dengan ramah.`,
+              data: { goalId: goal.id }
+            };
+          } catch (err: any) {
+            return { success: false, error: err.message };
+          }
+        }
+      }),
+
+      create_transfer: tool({
+        description: 'Lakukan transfer saldo antar rekening (memotong dari satu rekening dan menambahkan ke rekening lain).',
+        parameters: jsonSchema({
+          type: 'object',
+          properties: {
+            fromAccount: { 
+              type: 'string', 
+              description: 'Nama rekening sumber pengirim saldo (misalnya "SeaBank", "Cash").' 
+            },
+            toAccount: { 
+              type: 'string', 
+              description: 'Nama rekening tujuan penerima saldo (misalnya "Gopay", "BCA").' 
+            },
+            amount: { 
+              type: 'number', 
+              description: 'Jumlah saldo yang ditransfer (harus angka positif).' 
+            },
+            description: { 
+              type: 'string', 
+              description: 'Catatan singkat transfer (opsional).' 
+            },
+            date: { 
+              type: 'string', 
+              description: 'Tanggal transfer YYYY-MM-DD (opsional).' 
+            }
+          },
+          required: ['fromAccount', 'toAccount', 'amount']
+        }),
+        execute: async ({ fromAccount, toAccount, amount, description, date }: any) => {
+          try {
+            const targetDate = date || new Date().toISOString().split('T')[0];
+            const executeSupabase = createServerClient();
+            
+            // Fetch accounts
+            const { data: dbAccounts, error: accErr } = await executeSupabase
+              .from('accounts')
+              .select('id, name')
+              .eq('profile', profile)
+              .eq('is_active', true);
+
+            if (accErr || !dbAccounts || dbAccounts.length < 2) {
+              return { success: false, error: 'Rekening tidak cukup aktif untuk melakukan transfer.' };
+            }
+
+            // Match source account
+            const fromLower = fromAccount.toLowerCase();
+            const matchedFrom = dbAccounts.find(acc => 
+              acc.name.toLowerCase().includes(fromLower) || 
+              fromLower.includes(acc.name.toLowerCase())
+            );
+
+            // Match destination account
+            const toLower = toAccount.toLowerCase();
+            const matchedTo = dbAccounts.find(acc => 
+              acc.name.toLowerCase().includes(toLower) || 
+              toLower.includes(acc.name.toLowerCase())
+            );
+
+            if (!matchedFrom || !matchedTo) {
+              return { 
+                success: false, 
+                error: `Rekening tidak ditemukan. (Pengirim: ${matchedFrom ? 'Ditemukan' : 'Tidak Ditemukan'}, Penerima: ${matchedTo ? 'Ditemukan' : 'Tidak Ditemukan'})` 
+              };
+            }
+
+            if (matchedFrom.id === matchedTo.id) {
+              return { success: false, error: 'Rekening sumber dan rekening tujuan tidak boleh sama.' };
+            }
+
+            // Call fn_create_transfer RPC
+            const { data: txId, error: rpcError } = await executeSupabase.rpc('fn_create_transfer', {
+              p_from_account_id: matchedFrom.id,
+              p_to_account_id:   matchedTo.id,
+              p_amount:          amount,
+              p_description:     description || null,
+              p_date:            targetDate
+            });
+
+            if (rpcError) {
+              console.error('RPC Error creating transfer:', rpcError);
+              return { success: false, error: rpcError.message };
+            }
+
+            return { 
+              success: true, 
+              message: `Berhasil melakukan transfer dari rekening "${matchedFrom.name}" ke "${matchedTo.name}" sebesar Rp ${amount.toLocaleString('id-ID')}. Sampaikan konfirmasi ini kepada pengguna dengan ramah.`,
+              data: { txId }
+            };
+          } catch (err: any) {
+            return { success: false, error: err.message };
+          }
+        }
+      })
+    };
+
+    let result;
+    try {
+      result = await streamText({
+        model: githubOpenAI('gpt-4.1-mini'),
+        system: systemInstructions,
+        messages: recentMessages,
+        temperature: 0.2,
+        tools: chatTools,
+        onFinish: onFinishCallback
+      });
+    } catch (err: any) {
+      console.warn('Failed to call gpt-4.1-mini, falling back to gpt-4o-mini:', err);
+      result = await streamText({
+        model: githubOpenAI('gpt-4o-mini'),
+        system: systemInstructions,
+        messages: recentMessages,
+        temperature: 0.2,
+        tools: chatTools,
+        onFinish: onFinishCallback
+      });
+    }
     console.timeEnd('AI Stream Connect');
 
     return result.toDataStreamResponse();

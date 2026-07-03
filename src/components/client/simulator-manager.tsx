@@ -22,7 +22,8 @@ import {
   Info, 
   TrendingUp, 
   TrendingDown, 
-  DollarSign 
+  DollarSign,
+  Loader2
 } from 'lucide-react';
 
 interface SimulatedItem {
@@ -72,6 +73,9 @@ export default function SimulatorManager({
 
   // One-off payments (Biaya Nombok Sekali Bayar)
   const [oneOffs, setOneOffs] = useState<SimulatedItem[]>(savedState.oneOffs || []);
+
+  const [aiRecommendation, setAiRecommendation] = useState<string>('');
+  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
 
   // Auto Save Effect
   useEffect(() => {
@@ -224,6 +228,43 @@ export default function SimulatorManager({
 
     return { monthsTimeline, initialRest, totalOneOffs, recommendation };
   }, [startBalance, dreamCost, targetMonthOffset, incomes, expenses, oneOffs]);
+
+  // Debounced AI recommendation fetching
+  useEffect(() => {
+    setAiRecommendation('');
+    const delayDebounce = setTimeout(async () => {
+      if (parseFormattedNumber(dreamCost) <= 0) {
+        return;
+      }
+      setIsAiLoading(true);
+      try {
+        const res = await fetch('/api/ai-advisor/recommendation?type=simulator', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dreamName: dreamName || 'Aset Impian',
+            dreamCost: parseFormattedNumber(dreamCost),
+            targetMonthOffset,
+            incomes,
+            expenses,
+            oneOffs,
+            startBalance: parseFormattedNumber(startBalance),
+            timeline: roadmapProjection.monthsTimeline
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAiRecommendation(data.recommendation);
+        }
+      } catch (err) {
+        console.error('Failed to fetch AI recommendation for simulator:', err);
+      } finally {
+        setIsAiLoading(false);
+      }
+    }, 1000);
+
+    return () => clearTimeout(delayDebounce);
+  }, [startBalance, dreamCost, dreamName, targetMonthOffset, incomes, expenses, oneOffs, roadmapProjection.monthsTimeline]);
 
   return (
     <div className="space-y-6">
@@ -416,7 +457,14 @@ export default function SimulatorManager({
                 <h4 className="text-xs font-bold uppercase tracking-wider">Engine Analysis &amp; Rekomendasi</h4>
               </div>
               <p className="text-xs md:text-sm font-semibold leading-relaxed">
-                {roadmapProjection.recommendation}
+                {isAiLoading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-amber-300 shrink-0" />
+                    <span>Opin sedang menganalisis rencana simulasi Anda...</span>
+                  </span>
+                ) : (
+                  aiRecommendation || roadmapProjection.recommendation
+                )}
               </p>
             </div>
           </div>
