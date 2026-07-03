@@ -26,12 +26,11 @@ export async function POST(req: Request) {
 
     console.time('DB Fetch');
     // Fetch data for context
-    const [accountsRes, recurringRes, configRes, transactionsRes, currentMonthTxRes, categoriesRes] = await Promise.all([
+    const [accountsRes, recurringRes, configRes, transactionsRes, categoriesRes] = await Promise.all([
       supabase.from('accounts').select('id, name, balance, type').eq('profile', profile).eq('is_active', true),
       supabase.from('recurring_transactions').select('description, amount, type').eq('profile', profile).eq('is_active', true),
       supabase.from('simulator_configs').select('state').eq('profile', profile).maybeSingle(),
-      supabase.from('transactions').select('description, amount, type, transaction_date, category_id').eq('profile', profile).order('transaction_date', { ascending: false }).limit(30),
-      supabase.from('transactions').select('amount, type, category_id').eq('profile', profile).gte('transaction_date', startOfMonthStr),
+      supabase.from('transactions').select('description, amount, type, transaction_date, category_id').eq('profile', profile).order('transaction_date', { ascending: false }).limit(500),
       supabase.from('categories').select('id, name')
     ]);
     console.timeEnd('DB Fetch');
@@ -39,9 +38,11 @@ export async function POST(req: Request) {
     const accounts = accountsRes.data || [];
     const recurring = recurringRes.data || [];
     const simulator = configRes.data?.state || null;
-    const recentTransactions = transactionsRes.data || [];
-    const currentMonthTx = currentMonthTxRes.data || [];
+    const allTransactions = transactionsRes.data || [];
     const dbCategories = categoriesRes.data || [];
+
+    // Filter transactions to get current month ones for stats in-memory
+    const currentMonthTx = allTransactions.filter(t => t.transaction_date >= startOfMonthStr);
 
     // Calculate current month statistics
     const actualIncomeThisMonth = currentMonthTx
@@ -115,9 +116,9 @@ export async function POST(req: Request) {
     }
 
     // Ringkasan transaksi terbaru
-    const recentSummary = recentTransactions.length > 0
-      ? `\n## TRANSAKSI TERBARU (30 terakhir):\n` +
-        recentTransactions.map(t => {
+    const recentSummary = allTransactions.length > 0
+      ? `\n## TRANSAKSI TERBARU (Maksimal 150):\n` +
+        allTransactions.slice(0, 150).map(t => {
           const catName = dbCategories.find(c => c.id === t.category_id)?.name || 'Lainnya';
           return `- [${t.type}] ${t.description} (${catName}): **${formatRp(t.amount)}** (${t.transaction_date})`;
         }).join('\n')
