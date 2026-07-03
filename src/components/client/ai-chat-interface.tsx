@@ -136,6 +136,36 @@ export default function AiChatInterface() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
 
+  const messagesRef = useRef(messages);
+  const isLoadingRef = useRef(isLoading);
+  const currentSessionIdRef = useRef(currentSessionId);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+    isLoadingRef.current = isLoading;
+    currentSessionIdRef.current = currentSessionId;
+  }, [messages, isLoading, currentSessionId]);
+
+  useEffect(() => {
+    return () => {
+      if (isLoadingRef.current) {
+        const msgs = messagesRef.current;
+        const lastMsg = msgs[msgs.length - 1];
+        if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content.trim() !== '') {
+          fetch('/api/chat/save-partial', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: lastMsg.content,
+              sessionId: currentSessionIdRef.current || 'default'
+            }),
+            keepalive: true
+          }).catch(err => console.error('Failed to save partial message on unmount:', err));
+        }
+      }
+    };
+  }, []);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
@@ -278,7 +308,9 @@ export default function AiChatInterface() {
       if (res.ok) {
         const data = await res.json();
         setMessages(data.messages || []);
-        setTimeout(scrollToBottom, 100);
+        setTimeout(scrollToBottom, 50);
+        setTimeout(scrollToBottom, 150);
+        setTimeout(scrollToBottom, 350);
       }
     } catch (err) {
       console.error('Failed to load session messages:', err);
@@ -295,7 +327,9 @@ export default function AiChatInterface() {
           const data = await res.json();
           if (data.messages && data.messages.length > 0) {
             setMessages(data.messages);
-            setTimeout(scrollToBottom, 100);
+            setTimeout(scrollToBottom, 50);
+            setTimeout(scrollToBottom, 150);
+            setTimeout(scrollToBottom, 350);
           } else {
             // Show welcome message if no history
             setMessages([
@@ -321,9 +355,8 @@ export default function AiChatInterface() {
   const scrollToBottom = () => {
     if (chatCanvasRef.current) {
       chatCanvasRef.current.scrollTop = chatCanvasRef.current.scrollHeight;
-    } else {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
     }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
   };
 
   const handleScroll = () => {
