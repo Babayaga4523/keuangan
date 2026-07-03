@@ -2,7 +2,6 @@ import { streamText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createServerClient } from '@/lib/supabase-server';
 import { cookies } from 'next/headers';
-import { groq } from '@ai-sdk/groq';
 
 export const runtime = 'edge';
 export const maxDuration = 30;
@@ -23,7 +22,7 @@ export async function POST(req: Request) {
     // Fetch data for context
     const [accountsRes, recurringRes, configRes, transactionsRes] = await Promise.all([
       supabase.from('accounts').select('name, balance, type').eq('profile', profile).eq('is_active', true),
-      supabase.from('recurring_transactions').select('name, amount, type').eq('profile', profile).eq('is_active', true),
+      supabase.from('recurring_transactions').select('description, amount, type').eq('profile', profile).eq('is_active', true),
       supabase.from('simulator_configs').select('state').eq('profile', profile).maybeSingle(),
       supabase.from('transactions').select('description, amount, type, transaction_date').eq('profile', profile).order('transaction_date', { ascending: false }).limit(5)
     ]);
@@ -215,8 +214,13 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
 
     console.time('AI Stream Connect');
 
+    const githubOpenAI = createOpenAI({
+      baseURL: 'https://models.inference.ai.azure.com',
+      apiKey: process.env.GITHUB_PAT || '',
+    });
+
     const result = await streamText({
-      model: groq('llama-3.3-70b-versatile'),
+      model: githubOpenAI('gpt-4o'),
       system: systemPrompt + '\n\n**PENTING**: Pikirkan langkah demi langkah secara logis sebelum memberikan jawaban yang melibatkan angka atau perhitungan.',
       messages: recentMessages,
       temperature: 0.2,
