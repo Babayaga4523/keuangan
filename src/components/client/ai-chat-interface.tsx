@@ -49,7 +49,18 @@ const MemoizedMessageBubble = React.memo(({ message, isStreaming }: { message: M
           }`}
         >
           {isUser ? (
-            <p className="whitespace-pre-wrap">{message.content}</p>
+            <div className="space-y-2">
+              <p className="whitespace-pre-wrap">{message.content}</p>
+              {message.experimental_attachments && message.experimental_attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {message.experimental_attachments.map((att, idx) => (
+                    <div key={idx} className="max-w-[200px] rounded-lg overflow-hidden border border-slate-200/20 bg-slate-800/10">
+                      <img src={att.url} alt={att.name || 'Attachment'} className="w-full h-auto max-h-40 object-cover" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           ) : (
             <div className={`markdown-body w-full overflow-hidden min-w-0 ${isStreaming ? 'streaming-caret' : ''}`}>
               <ReactMarkdown 
@@ -94,7 +105,12 @@ const MemoizedMessageBubble = React.memo(({ message, isStreaming }: { message: M
       </div>
     </div>
   );
-}, (prevProps, nextProps) => prevProps.message.content === nextProps.message.content && prevProps.message.role === nextProps.message.role && prevProps.isStreaming === nextProps.isStreaming);
+}, (prevProps, nextProps) => 
+  prevProps.message.content === nextProps.message.content && 
+  prevProps.message.role === nextProps.message.role && 
+  prevProps.isStreaming === nextProps.isStreaming &&
+  prevProps.message.experimental_attachments?.length === nextProps.message.experimental_attachments?.length
+);
 
 export default function AiChatInterface() {
   const [currentSessionId, setCurrentSessionId] = useState<string>('default');
@@ -105,14 +121,143 @@ export default function AiChatInterface() {
   const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages, error, setInput } = useChat({
     api: '/api/chat',
     body: { sessionId: currentSessionId },
-    initialMessages: []
+    initialMessages: [],
+    maxSteps: 5
   });
 
   const [isInitializing, setIsInitializing] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [attachments, setAttachments] = useState<Array<{ url: string; name: string; contentType: string }>>([]);
+  const [isListening, setIsListening] = useState(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatCanvasRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<any>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
+    
+    files.forEach(file => {
+      if (file.size > 4 * 1024 * 1024) {
+        alert(`Berkas ${file.name} melebihi batas ukuran 4MB.`);
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        setAttachments(prev => [...prev, {
+          url: base64,
+          name: file.name,
+          contentType: file.type
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    
+    e.target.value = '';
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.indexOf('image') !== -1) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) continue;
+
+        if (file.size > 4 * 1024 * 1024) {
+          alert(`Berkas ${file.name} melebihi batas ukuran 4MB.`);
+          continue;
+        }
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = reader.result as string;
+          setAttachments(prev => [...prev, {
+            url: base64,
+            name: file.name || `Pasted_Image_${Date.now()}.png`,
+            contentType: file.type
+          }]);
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const startListening = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Browser Anda tidak mendukung Voice Input. Gunakan Chrome atau Safari.');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.lang = 'id-ID';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setInput(prev => prev + (prev ? ' ' : '') + transcript);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+    setIsListening(false);
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
+  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!input.trim() && attachments.length === 0) return;
+    
+    if (attachments.length > 0) {
+      handleSubmit(e, {
+        experimental_attachments: attachments as any
+      });
+    } else {
+      handleSubmit(e);
+    }
+    setAttachments([]);
+  };
 
   const fetchSessions = async () => {
     try {
@@ -453,42 +598,88 @@ export default function AiChatInterface() {
             <footer className="p-6 border-t border-[#c6c6cd] bg-white shrink-0">
               <div className="max-w-4xl mx-auto">
                 <form 
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (input.trim()) handleSubmit(e);
-                  }}
-                  className="flex items-end gap-4 p-2.5 border border-[#c6c6cd] rounded-xl bg-[#f7f9fb] focus-within:bg-white focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all shadow-sm"
+                  onSubmit={handleFormSubmit}
+                  className="flex flex-col gap-2 p-2.5 border border-[#c6c6cd] rounded-xl bg-[#f7f9fb] focus-within:bg-white focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all shadow-sm"
                 >
-                  <button type="button" className="p-2 text-[#76777d] hover:text-black transition-colors shrink-0">
-                    <svg xmlns="http://www.w3.org/2008/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-                  </button>
-                  
-                  <textarea
-                    ref={textareaRef}
-                    className="flex-1 py-2 px-0 bg-transparent border-none focus:ring-0 resize-none font-medium text-[13px] sm:text-[14px] max-h-32 min-h-[40px] outline-none scrollbar-hide text-[#191c1e] placeholder-[#76777d]"
-                    placeholder="Tanyakan soal saldo, target nabung, atau tips hemat..."
-                    value={input}
-                    onChange={handleInputChange}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        if (input.trim()) handleSubmit(e as any);
-                      }
-                    }}
-                    rows={1}
+                  {/* File Input */}
+                  <input 
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    multiple
+                    onChange={handleFileChange}
                   />
-                  
-                  <div className="flex items-center gap-1 px-2 pb-1 shrink-0">
-                    <button type="button" className="p-2 text-[#76777d] hover:text-black transition-colors">
-                      <svg xmlns="http://www.w3.org/2008/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-                    </button>
+
+                  {/* Attachments Preview */}
+                  {attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-2 p-2 border-b border-slate-200 w-full mb-2">
+                      {attachments.map((att, idx) => (
+                        <div key={idx} className="relative w-14 h-14 rounded-lg overflow-hidden border border-slate-200 bg-slate-100 group shadow-xs">
+                          <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeAttachment(idx)}
+                            className="absolute top-0.5 right-0.5 bg-black/60 hover:bg-black text-white p-0.5 rounded-full shadow-xs active:scale-90 transition-all flex items-center justify-center"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-end gap-4 w-full">
                     <button 
-                      type="submit"
-                      disabled={isLoading || !input.trim()}
-                      className="w-10 h-10 bg-black text-white flex items-center justify-center rounded transition-transform active:scale-95 shadow-lg disabled:opacity-50 disabled:active:scale-100"
+                      type="button" 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-2 text-[#76777d] hover:text-black hover:bg-slate-100 rounded-lg transition-colors shrink-0"
+                      title="Unggah Gambar/Struk"
                     >
-                      <Send className="w-4 h-4 ml-0.5" />
+                      <svg xmlns="http://www.w3.org/2008/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                     </button>
+                    
+                    <textarea
+                      ref={textareaRef}
+                      className="flex-1 py-2 px-0 bg-transparent border-none focus:ring-0 resize-none font-medium text-[13px] sm:text-[14px] max-h-32 min-h-[40px] outline-none scrollbar-hide text-[#191c1e] placeholder-[#76777d]"
+                      placeholder="Tanyakan soal saldo, target nabung, atau tips hemat..."
+                      value={input}
+                      onChange={handleInputChange}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          if (input.trim() || attachments.length > 0) {
+                            e.currentTarget.form?.requestSubmit();
+                          }
+                        }
+                      }}
+                      onPaste={handlePaste}
+                      rows={1}
+                    />
+                    
+                    <div className="flex items-center gap-1 px-2 pb-1 shrink-0">
+                      <button 
+                        type="button" 
+                        onClick={toggleListening}
+                        className={`p-2 rounded-full transition-all shrink-0 ${
+                          isListening 
+                            ? 'bg-red-500 text-white animate-pulse shadow-md scale-110' 
+                            : 'text-[#76777d] hover:text-black hover:bg-slate-100'
+                        }`}
+                        title={isListening ? "Sedang merekam (klik untuk selesai)..." : "Masukkan suara (Mic)"}
+                      >
+                        <svg xmlns="http://www.w3.org/2008/svg" viewBox="0 0 24 24" fill={isListening ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                      </button>
+                      <button 
+                        type="submit"
+                        disabled={isLoading || (!input.trim() && attachments.length === 0)}
+                        className="w-10 h-10 bg-black text-white flex items-center justify-center rounded transition-transform active:scale-95 shadow-lg disabled:opacity-50 disabled:active:scale-100"
+                      >
+                        <Send className="w-4 h-4 ml-0.5" />
+                      </button>
+                    </div>
                   </div>
                 </form>
                 <p className="text-center text-[10px] text-[#76777d] mt-4 uppercase tracking-tighter">
