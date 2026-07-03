@@ -20,13 +20,19 @@ export async function POST(req: Request) {
     const cookieStore = await cookies();
     const profile = cookieStore.get('current_profile')?.value || 'silva';
 
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    const startOfMonthStr = startOfMonth.toISOString().split('T')[0];
+
     console.time('DB Fetch');
     // Fetch data for context
-    const [accountsRes, recurringRes, configRes, transactionsRes] = await Promise.all([
-      supabase.from('accounts').select('name, balance, type').eq('profile', profile).eq('is_active', true),
+    const [accountsRes, recurringRes, configRes, transactionsRes, currentMonthTxRes, categoriesRes] = await Promise.all([
+      supabase.from('accounts').select('id, name, balance, type').eq('profile', profile).eq('is_active', true),
       supabase.from('recurring_transactions').select('description, amount, type').eq('profile', profile).eq('is_active', true),
       supabase.from('simulator_configs').select('state').eq('profile', profile).maybeSingle(),
-      supabase.from('transactions').select('description, amount, type, transaction_date').eq('profile', profile).order('transaction_date', { ascending: false }).limit(5)
+      supabase.from('transactions').select('description, amount, type, transaction_date, category_id').eq('profile', profile).order('transaction_date', { ascending: false }).limit(30),
+      supabase.from('transactions').select('amount, type, category_id').eq('profile', profile).gte('transaction_date', startOfMonthStr),
+      supabase.from('categories').select('id, name')
     ]);
     console.timeEnd('DB Fetch');
 
@@ -34,6 +40,25 @@ export async function POST(req: Request) {
     const recurring = recurringRes.data || [];
     const simulator = configRes.data?.state || null;
     const recentTransactions = transactionsRes.data || [];
+    const currentMonthTx = currentMonthTxRes.data || [];
+    const dbCategories = categoriesRes.data || [];
+
+    // Calculate current month statistics
+    const actualIncomeThisMonth = currentMonthTx
+      .filter(t => t.type === 'INCOME')
+      .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+      
+    const actualExpenseThisMonth = currentMonthTx
+      .filter(t => t.type === 'EXPENSE')
+      .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+    const categoryTotals: { [name: string]: number } = {};
+    currentMonthTx
+      .filter(t => t.type === 'EXPENSE')
+      .forEach(t => {
+        const catName = dbCategories.find(c => c.id === t.category_id)?.name || 'Lainnya';
+        categoryTotals[catName] = (categoryTotals[catName] || 0) + parseFloat(t.amount);
+      });
 
     // COMPUTE DERIVED METRICS BEFORE INJECTING TO PROMPT
     const totalBalance = accounts.reduce((sum, acc) => sum + parseFloat(acc.balance), 0);
@@ -91,10 +116,11 @@ export async function POST(req: Request) {
 
     // Ringkasan transaksi terbaru
     const recentSummary = recentTransactions.length > 0
-      ? `\n## TRANSAKSI TERBARU (5 terakhir):\n` +
-        recentTransactions.map(t =>
-          `- [${t.type}] ${t.description}: ${formatRp(t.amount)} (${t.transaction_date})`
-        ).join('\n')
+      ? `\n## TRANSAKSI TERBARU (30 terakhir):\n` +
+        recentTransactions.map(t => {
+          const catName = dbCategories.find(c => c.id === t.category_id)?.name || 'Lainnya';
+          return `- [${t.type}] ${t.description} (${catName}): **${formatRp(t.amount)}** (${t.transaction_date})`;
+        }).join('\n')
       : '';
 
     const now = new Date().toLocaleDateString('id-ID', {
@@ -118,7 +144,7 @@ ${accounts.length > 0
   : '- Belum ada rekening terdaftar'}
 - **Total Saldo: ${formatRp(totalBalance)}**
 
-## Arus Kas Bulanan Rutin
+## Arus Kas Bulanan Rutin (Anggaran Rutin)
 - Pemasukan: **${formatRp(totalIncome)}**
 - Pengeluaran: **${formatRp(totalExpense)}**
 - Kas Bersih: **${formatRp(netCashFlow)}** ${netCashFlow >= 0 ? '✅' : '❌ (defisit)'}
@@ -126,6 +152,16 @@ ${accounts.length > 0
     parseFloat(savingsRate) >= 20 ? '✅ Baik' :
     parseFloat(savingsRate) >= 10 ? '⚠️ Perlu ditingkatkan' : '❌ Terlalu rendah'
   }
+
+## Realisasi Transaksi Bulan Ini (Aktual Sejak ${startOfMonthStr})
+- Total Pemasukan Aktual: **${formatRp(actualIncomeThisMonth)}**
+- Total Pengeluaran Aktual: **${formatRp(actualExpenseThisMonth)}**
+- Arus Kas Aktual Bersih: **${formatRp(actualIncomeThisMonth - actualExpenseThisMonth)}** ${actualIncomeThisMonth - actualExpenseThisMonth >= 0 ? '✅' : '❌ (defisit)'}
+
+### Breakdown Pengeluaran per Kategori Bulan Ini (Aktual):
+${Object.keys(categoryTotals).length > 0 
+  ? Object.entries(categoryTotals).map(([cat, amt]) => `- ${cat}: **${formatRp(amt)}**`).join('\n')
+  : '- Belum ada pengeluaran aktual tercatat bulan ini'}
 
 ## Kesehatan Finansial
 - Dana Darurat (3× pengeluaran): ${emergencyFundStatus}
