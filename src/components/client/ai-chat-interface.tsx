@@ -26,13 +26,13 @@ const MemoizedMessageBubble = React.memo(({ message, isStreaming }: { message: M
   const timeLabel = isUser ? 'You • Baru saja' : 'Opin AI • Baru saja';
 
   return (
-    <div className={`flex gap-4 group ${isUser ? 'flex-row-reverse' : ''}`}>
+    <div className={`flex gap-2.5 sm:gap-4 group ${isUser ? 'flex-row-reverse' : ''}`}>
       {/* Avatar with status indicator */}
       <div className="relative shrink-0 mt-1">
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-xs ${
+        <div className={`w-7.5 h-7.5 sm:w-8 h-8 rounded-full flex items-center justify-center shadow-xs ${
           isUser ? 'bg-gradient-to-tr from-slate-200 to-[#d0e1fb] text-[#0b1c30]' : 'bg-black text-white'
         }`}>
-          {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+          {isUser ? <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
         </div>
         {!isUser && (
           <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full border border-white bg-emerald-500" />
@@ -42,7 +42,7 @@ const MemoizedMessageBubble = React.memo(({ message, isStreaming }: { message: M
       {/* Bubble Container */}
       <div className={`flex-1 flex flex-col min-w-0 ${isUser ? 'items-end' : 'items-start'}`}>
         <div
-          className={`rounded-xl p-4 sm:p-5 text-[13px] sm:text-[14px] leading-relaxed w-full max-w-[85%] min-w-0 transition-all ${
+          className={`rounded-xl p-3.5 sm:p-5 text-[13px] sm:text-[14px] leading-relaxed w-full max-w-[94%] sm:max-w-[85%] min-w-0 transition-all ${
             isUser
               ? 'bg-black text-white rounded-tr-none hover:shadow-xs'
               : 'bg-[#f8fafc] border border-slate-200/65 text-[#191c1e] rounded-tl-none hover:shadow-xs'
@@ -535,7 +535,7 @@ export default function AiChatInterface() {
         ) : (
           <>
             {/* Chat Canvas */}
-            <section ref={chatCanvasRef} onScroll={handleScroll} className="flex-1 overflow-y-auto w-full min-w-0 p-6 bg-white scrollbar-hide flex flex-col justify-start">
+            <section ref={chatCanvasRef} onScroll={handleScroll} className="flex-1 overflow-y-auto w-full min-w-0 p-3.5 sm:p-6 bg-white scrollbar-hide flex flex-col justify-start">
               {showSuggestions ? (
                 /* Centered Welcome Page (ChatGPT Style) */
                 <div className="flex-1 flex flex-col items-center justify-center max-w-3xl mx-auto px-4 py-8 sm:py-16 w-full my-auto">
@@ -628,11 +628,11 @@ export default function AiChatInterface() {
             )}
 
             {/* Message Input Area */}
-            <footer className="p-6 border-t border-[#c6c6cd] bg-white shrink-0">
+            <footer className="p-3 sm:p-6 border-t border-[#c6c6cd] bg-white shrink-0">
               <div className="max-w-4xl mx-auto">
                 <form 
                   onSubmit={handleFormSubmit}
-                  className="flex flex-col gap-2 p-2.5 border border-[#c6c6cd] rounded-xl bg-[#f7f9fb] focus-within:bg-white focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all shadow-sm"
+                  className="flex flex-col gap-1.5 p-2 sm:p-3 border border-[#c6c6cd] rounded-xl bg-[#f7f9fb] focus-within:bg-white focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all shadow-sm"
                 >
                   {/* File Input */}
                   <input 
