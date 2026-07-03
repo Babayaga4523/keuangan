@@ -146,7 +146,7 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (v) { setErrorMsg(null); } }}>
       <DialogTrigger render={
-        <button className="flex items-center gap-1.5 px-4 py-2 bg-black text-white hover:bg-black/90 transition-all text-xs font-bold rounded-lg shrink-0">
+        <button className="flex items-center justify-center w-full gap-1.5 px-4 py-2.5 sm:py-2 bg-black text-white hover:bg-black/90 transition-all text-sm sm:text-xs font-bold rounded-xl sm:rounded-lg shrink-0 shadow-sm active:scale-95">
           <Plus className="h-4 w-4" />
           <span>Catat Transaksi</span>
         </button>

@@ -478,7 +478,7 @@ export default async function DashboardPage() {
                 <th className="px-6 py-3.5 font-bold">Jenis Rekening</th>
                 <th className="px-6 py-3.5 font-bold hidden md:table-cell">Keterangan</th>
                 <th className="px-6 py-3.5 font-bold text-right">Saldo</th>
-                <th className="px-6 py-3.5 font-bold text-right">Persentase</th>
+                <th className="px-6 py-3.5 font-bold text-right hidden sm:table-cell">Persentase</th>
                 <th className="px-6 py-3.5 font-bold hidden sm:table-cell">Status</th>
               </tr>
             </thead>
@@ -499,7 +499,7 @@ export default async function DashboardPage() {
                       Limit Alert: {formatRupiah(parseFloat(acc.low_balance_threshold || '0'))}
                     </td>
                     <td className="px-6 py-4 font-bold text-right font-mono text-black">{formatRupiah(balanceVal)}</td>
-                    <td className="px-6 py-4 text-right font-bold font-mono text-[#45464d]">{pct}%</td>
+                    <td className="px-6 py-4 text-right font-bold font-mono text-[#45464d] hidden sm:table-cell">{pct}%</td>
                     <td className="px-6 py-4 hidden sm:table-cell">
                       <div className="flex items-center gap-2">
                         <span className="px-2.5 py-0.5 rounded-full bg-[#d0e1fb] text-[#38485d] text-[10px] font-bold">

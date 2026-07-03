@@ -218,17 +218,20 @@ export default function TransactionManager({
           <h1 className="text-xl font-bold tracking-tight text-black md:text-2xl">Transaction Ledger</h1>
           <p className="text-xs text-[#45464d] font-medium">Pemantauan arus kas masuk dan keluar secara presisi real-time.</p>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0 w-full md:w-auto">
           <ImportCSVDialog accounts={accounts} />
           <Button 
             variant="outline" 
             onClick={handleExportCSV}
-            className="h-9 border-[#c6c6cd] text-xs font-semibold px-3 rounded-lg"
+            className="h-9 border-[#c6c6cd] text-xs font-semibold px-3 rounded-lg flex-1 md:flex-none"
           >
             <Download className="mr-1.5 h-4 w-4" />
-            Ekspor CSV
+            <span className="hidden sm:inline">Ekspor CSV</span>
+            <span className="sm:hidden">Ekspor</span>
           </Button>
-          <TransactionForm accounts={accounts} categories={categories} profile={profile} />
+          <div className="w-full sm:w-auto mt-1 sm:mt-0">
+            <TransactionForm accounts={accounts} categories={categories} profile={profile} />
+          </div>
         </div>
       </div>
 
@@ -310,8 +313,8 @@ export default function TransactionManager({
                   <tr>
                     <th className="px-6 py-3.5 font-bold">Tanggal</th>
                     <th className="px-6 py-3.5 font-bold">Deskripsi</th>
-                    <th className="px-6 py-3.5 font-bold">Kategori</th>
-                    <th className="px-6 py-3.5 font-bold">Akun</th>
+                    <th className="px-6 py-3.5 font-bold hidden md:table-cell">Kategori</th>
+                    <th className="px-6 py-3.5 font-bold hidden md:table-cell">Akun</th>
                     <th className="px-6 py-3.5 font-bold text-right">Jumlah</th>
                     <th className="px-6 py-3.5 w-[90px]"></th>
                   </tr>
@@ -362,6 +365,21 @@ export default function TransactionManager({
                                 </button>
                               )}
                             </div>
+                            
+                            {/* Mobile only badges for Category and Account */}
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1.5 md:hidden">
+                              {tx.categories?.name && (
+                                <span className="px-1.5 py-0.5 bg-[#f2f4f6] text-[#45464d] text-[9px] font-bold rounded uppercase">
+                                  {tx.categories.name}
+                                </span>
+                              )}
+                              <span className="px-1.5 py-0.5 bg-[#eceef0] text-[#38485d] text-[9px] font-bold rounded">
+                                {tx.type === 'TRANSFER' && tx.destination_account 
+                                  ? `${tx.accounts?.name} → ${tx.destination_account.name}` 
+                                  : tx.accounts?.name}
+                              </span>
+                            </div>
+
                             {tx.tags && (
                               <div className="flex flex-wrap gap-1 mt-1 font-normal">
                                 {tx.tags.split(',').map((tag, idx) => (
@@ -372,7 +390,7 @@ export default function TransactionManager({
                               </div>
                             )}
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-6 py-4 hidden md:table-cell">
                             {tx.categories?.name ? (
                               <span className="px-2 py-0.5 bg-[#f2f4f6] text-[#45464d] text-[10px] font-bold rounded uppercase">
                                 {tx.categories.name}
@@ -381,7 +399,7 @@ export default function TransactionManager({
                               <span className="text-slate-400">-</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 text-[#45464d]">
+                          <td className="px-6 py-4 text-[#45464d] hidden md:table-cell">
                             {tx.type === 'TRANSFER' && tx.destination_account ? (
                               <div className="flex items-center space-x-1 font-semibold text-slate-700">
                                 <span>{tx.accounts?.name}</span>

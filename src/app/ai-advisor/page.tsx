@@ -11,20 +11,8 @@ export default async function AiAdvisorPage() {
   const profile = cookieStore.get('current_profile')?.value || 'silva';
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-          <Bot className="h-6 w-6 text-blue-600" />
-          Penasihat AI Pribadi
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Konsultasikan kondisi keuangan Anda, tanyakan apakah anggaran sudah sehat, atau minta rekomendasi pintar.
-        </p>
-      </div>
-
-      <div className="bg-white border border-[#e2e8f0] rounded-xl overflow-hidden h-[calc(100vh-12rem)] min-h-[500px]">
-        <AiChatInterface key={profile} />
-      </div>
+    <div className="fixed top-16 md:top-0 left-0 md:left-64 right-0 bottom-0 bg-white flex flex-col overflow-hidden z-10">
+      <AiChatInterface key={profile} />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { streamText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createServerClient } from '@/lib/supabase-server';
 import { cookies } from 'next/headers';
+import { groq } from '@ai-sdk/groq';
 
 export const runtime = 'edge';
 export const maxDuration = 30;
@@ -12,7 +13,7 @@ function formatRp(val: string | number) {
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const { messages, sessionId } = await req.json();
 
     const supabase = createServerClient();
     const cookieStore = await cookies();
@@ -203,7 +204,8 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
       await supabase.from('chat_messages').insert({
         profile: profile,
         role: 'user',
-        content: lastUserMessage.content
+        content: lastUserMessage.content,
+        session_id: sessionId || 'default'
       });
     }
 
@@ -213,16 +215,11 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
 
     console.time('AI Stream Connect');
 
-    const groq = createOpenAI({
-      baseURL: 'https://api.groq.com/openai/v1',
-      apiKey: process.env.GROQ_API_KEY,
-    });
-    
     const result = await streamText({
       model: groq('llama-3.3-70b-versatile'),
-      system: systemPrompt,
+      system: systemPrompt + '\n\n**PENTING**: Pikirkan langkah demi langkah secara logis sebelum memberikan jawaban yang melibatkan angka atau perhitungan.',
       messages: recentMessages,
-      temperature: 0.7,
+      temperature: 0.2,
       onFinish: async ({ text }) => {
         // Save the AI response to database
         try {
@@ -230,7 +227,8 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
           await finishSupabase.from('chat_messages').insert({
             profile: profile,
             role: 'assistant',
-            content: text
+            content: text,
+            session_id: sessionId || 'default'
           });
         } catch (err) {
           console.error('Failed to save AI response:', err);
