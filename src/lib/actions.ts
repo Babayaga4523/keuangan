@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createServerClient } from './supabase-server';
 import { cookies } from 'next/headers';
+import { getJakartaDate } from '@/utils/date';
 import {
   TransactionSchema,
   TransferSchema,
@@ -409,7 +410,7 @@ export async function actionExecuteRecurring(id: string): Promise<ActionResult> 
     p_amount:      rec.amount,
     p_type:        rec.type,
     p_description: rec.description ?? `[Auto] ${rec.description || 'Recurring'}`,
-    p_date:        new Date().toISOString().split('T')[0],
+    p_date:        getJakartaDate().dateString,
   });
 
   if (txErr) return { success: false, error: txErr.message };
@@ -460,6 +461,30 @@ export async function actionUpdateAccountThreshold(data: {
 }
 
 // ───────────────────────────────────────────────
+// ACTION 14b: Update Saldo Rekening Langsung
+// ───────────────────────────────────────────────
+export async function actionUpdateAccountBalance(data: {
+  accountId: string;
+  balance: number;
+}): Promise<ActionResult> {
+  if (data.balance < 0) {
+    return { success: false, error: 'Saldo tidak boleh negatif' };
+  }
+
+  const supabase = createServerClient();
+
+  const { error } = await supabase
+    .from('accounts')
+    .update({ balance: data.balance })
+    .eq('id', data.accountId);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath('/dashboard');
+  return { success: true, data: undefined };
+}
+
+// ───────────────────────────────────────────────
 // ACTION 15: Ambil Data Perbandingan Silva vs Yoga
 // ───────────────────────────────────────────────
 export async function actionGetComparisonData(): Promise<ActionResult<{
@@ -467,9 +492,7 @@ export async function actionGetComparisonData(): Promise<ActionResult<{
   yoga: { totalBalance: number; income: number; expense: number };
 }>> {
   const supabase = createServerClient();
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  const { startOfMonthString: startOfMonth, endOfMonthString: endOfMonth } = getJakartaDate();
 
   // Fetch all accounts and current month transactions for both profiles
   const [accountsRes, txRes] = await Promise.all([

@@ -3,6 +3,8 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createServerClient } from '@/lib/supabase-server';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
+import { getJakartaDate, getJakartaFullDateString } from '@/utils/date';
+
 
 
 export const runtime = 'edge';
@@ -20,9 +22,7 @@ export async function POST(req: Request) {
     const cookieStore = await cookies();
     const profile = cookieStore.get('current_profile')?.value || 'silva';
 
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    const startOfMonthStr = startOfMonth.toISOString().split('T')[0];
+    const { startOfMonthString: startOfMonthStr } = getJakartaDate();
 
     console.time('DB Fetch');
     // Fetch data for context
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
       supabase.from('accounts').select('id, name, balance, type').eq('profile', profile).eq('is_active', true),
       supabase.from('recurring_transactions').select('description, amount, type').eq('profile', profile).eq('is_active', true),
       supabase.from('simulator_configs').select('state').eq('profile', profile).maybeSingle(),
-      supabase.from('transactions').select('description, amount, type, transaction_date, category_id').eq('profile', profile).order('transaction_date', { ascending: false }).limit(500),
+      supabase.from('transactions').select('id, description, amount, type, transaction_date, category_id').eq('profile', profile).order('transaction_date', { ascending: false }).limit(500),
       supabase.from('categories').select('id, name')
     ]);
     console.timeEnd('DB Fetch');
@@ -96,7 +96,7 @@ export async function POST(req: Request) {
         : null;
         
       const targetDate = targetOffset > 0
-        ? new Date(Date.now() + targetOffset * 30 * 24 * 60 * 60 * 1000).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+        ? new Date(Date.now() + targetOffset * 30 * 24 * 60 * 60 * 1000).toLocaleDateString('id-ID', { month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' })
         : null;
 
       dreamAnalysis = `
@@ -120,20 +120,18 @@ export async function POST(req: Request) {
       ? `\n## TRANSAKSI TERBARU (Maksimal 150):\n` +
         allTransactions.slice(0, 150).map(t => {
           const catName = dbCategories.find(c => c.id === t.category_id)?.name || 'Lainnya';
-          return `- [${t.type}] ${t.description} (${catName}): **${formatRp(t.amount)}** (${t.transaction_date})`;
+          return `- ID: ${t.id} | [${t.type}] ${t.description} (${catName}): **${formatRp(t.amount)}** (${t.transaction_date})`;
         }).join('\n')
       : '';
 
-    const now = new Date().toLocaleDateString('id-ID', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-    });
+    const now = getJakartaFullDateString();
 
     // SYSTEM PROMPT
     const systemPrompt = `
 # IDENTITAS
 Kamu adalah **Opin**, AI Financial Advisor pribadi yang cerdas, suportif, dan jujur.
 Profil pengguna aktif: **${profile}**
-Tanggal hari ini: ${now}
+Waktu & tanggal saat ini: ${now}
 
 ---
 
@@ -317,7 +315,18 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
       apiKey: process.env.GITHUB_PAT || '',
     });
 
-    const systemInstructions = systemPrompt + '\n\n**PENTING**: Pikirkan langkah demi langkah secara logis sebelum memberikan jawaban yang melibatkan angka atau perhitungan. Jika pengguna meminta untuk mencatat transaksi keuangan, gunakan `add_transaction`. Jika pengguna meminta transfer saldo, gunakan `create_transfer`. Jika pengguna meminta target tabungan baru, gunakan `add_saving_goal`. Panggil alat-alat ini secara otonom tanpa perlu meminta konfirmasi ulang.';
+    const systemInstructions = systemPrompt + '\n\n' + 
+      '## ATURAN PEMICU AKSI (WAJIB DIPATUHI)\n' +
+      'Kamu HANYA boleh memanggil function/tool add_transaction, delete_transaction, create_transfer, atau add_saving_goal jika pesan user mengandung KATA KERJA IMPERATIF eksplisit yang secara langsung memerintahkan aksi, contoh: "catat", "tambahkan", "masukkan", "input", "simpan", "hapus", "batalkan", "hilangkan", "transfer", "pindahkan", "buat target".\n\n' +
+      'DILARANG memanggil function apapun jika user:\n' +
+      '- Hanya bercerita/curhat tentang pengeluaran/pemasukan tanpa perintah ("tadi aku jajan kopi 20rb", "kemarin service motor abis 150rb")\n' +
+      '- Menyebut angka sebagai konteks pertanyaan, bukan instruksi ("kalau aku beli motor 20 juta, aman gak?")\n' +
+      '- Menyatakan fakta masa lalu tanpa kata kerja perintah eksplisit ("BCA ku baru masuk gaji 6 juta")\n\n' +
+      'JIKA AMBIGU (ada angka + transaksi, tapi tidak ada kata kerja perintah yang jelas, atau perintah bercampur dengan curhat panjang):\n' +
+      '- JANGAN langsung eksekusi function.\n' +
+      '- Tanya konfirmasi dulu: "Mau aku catat sebagai transaksi ya?" atau konfirmasi yang setara.\n' +
+      '- Baru panggil function SETELAH user menjawab ya/konfirmasi eksplisit di giliran (turn) berikutnya.\n\n' +
+      'Prioritaskan respons teks (empati/saran/analisis) sebagai default. Trigger function adalah PENGECUALIAN, bukan default behavior. Pikirkan langkah demi langkah secara logis sebelum memberikan jawaban yang melibatkan angka atau perhitungan.';
 
     const onFinishCallback = async ({ text }: any) => {
       try {
@@ -336,7 +345,7 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
 
     const chatTools = {
       add_transaction: tool({
-        description: 'Tambahkan transaksi pengeluaran atau pemasukan baru ke database pengguna. Gunakan ini secara otomatis jika pengguna menyebutkan pengeluaran atau pemasukan tanpa harus meminta persetujuan berulang.',
+        description: 'Mencatat transaksi keuangan baru ke database. PANGGIL HANYA jika user memberi perintah eksplisit dengan kata kerja imperatif: \'catat\', \'tambahkan\', \'input\', \'masukkan\', \'simpan\'. JANGAN panggil jika user hanya bercerita/curhat tentang pengeluaran tanpa menyuruh mencatat, atau menyebut angka sebagai bagian dari pertanyaan/simulasi. Jika ragu apakah ini perintah atau curhat, JANGAN panggil function ini — tanya konfirmasi ke user terlebih dahulu via teks.',
         parameters: jsonSchema({
           type: 'object',
           properties: {
@@ -370,7 +379,7 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
         }),
         execute: async ({ amount, type, description, category, accountName, date }: any) => {
           try {
-            const targetDate = date || new Date().toISOString().split('T')[0];
+            const targetDate = date || getJakartaDate().dateString;
             const executeSupabase = createServerClient();
             
             // 1. Fetch accounts and categories
@@ -463,7 +472,7 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
       }),
 
       add_saving_goal: tool({
-        description: 'Tambahkan target tabungan baru (saving goal) ke database.',
+        description: 'Tambahkan target tabungan baru (saving goal) ke database. PANGGIL HANYA jika user memberi perintah eksplisit dengan kata kerja imperatif: \'buat target\', \'tambahkan target\', \'buat tabungan\', \'set target\'. JANGAN panggil jika user hanya bertanya, berdiskusi, atau mensimulasikan rencana belanja tanpa menyuruh membuat target resmi.',
         parameters: jsonSchema({
           type: 'object',
           properties: {
@@ -518,7 +527,7 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
       }),
 
       create_transfer: tool({
-        description: 'Lakukan transfer saldo antar rekening (memotong dari satu rekening dan menambahkan ke rekening lain).',
+        description: 'Memindahkan saldo antar rekening. PANGGIL HANYA jika user eksplisit memerintahkan: \'transfer\', \'pindahkan\', \'sesuaikan saldo dari X ke Y\' dengan sumber, tujuan, dan nominal yang jelas. JANGAN panggil jika user hanya menyebutkan riwayat transfer yang sudah terjadi di rekening lain (misal cerita tentang mutasi bank) tanpa minta dicatat di sistem ini.',
         parameters: jsonSchema({
           type: 'object',
           properties: {
@@ -547,7 +556,7 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
         }),
         execute: async ({ fromAccount, toAccount, amount, description, date }: any) => {
           try {
-            const targetDate = date || new Date().toISOString().split('T')[0];
+            const targetDate = date || getJakartaDate().dateString;
             const executeSupabase = createServerClient();
             
             // Fetch accounts
@@ -604,6 +613,46 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
               success: true, 
               message: `Berhasil melakukan transfer dari rekening "${matchedFrom.name}" ke "${matchedTo.name}" sebesar Rp ${amount.toLocaleString('id-ID')}. Sampaikan konfirmasi ini kepada pengguna dengan ramah.`,
               data: { txId }
+            };
+          } catch (err: any) {
+            return { success: false, error: err.message };
+          }
+        }
+      }),
+
+      delete_transaction: tool({
+        description: 'Menghapus transaksi dari database berdasarkan ID unik. PANGGIL HANYA jika user eksplisit memerintahkan penghapusan: \'hapus\', \'batalkan\', \'hilangkan transaksi\'. JANGAN panggil hanya karena user menyebut sebuah transaksi salah/typo tanpa menyuruh menghapus — konfirmasi dulu transaksi mana & minta persetujuan eksplisit sebelum eksekusi, karena aksi ini bersifat destruktif dan tidak dapat dibatalkan.',
+        parameters: jsonSchema({
+          type: 'object',
+          properties: {
+            transactionId: { 
+              type: 'string', 
+              description: 'ID UUID transaksi yang ingin dihapus.' 
+            },
+            description: {
+              type: 'string',
+              description: 'Deskripsi singkat transaksi yang akan dihapus (untuk konfirmasi ramah).'
+            }
+          },
+          required: ['transactionId']
+        }),
+        execute: async ({ transactionId, description }: any) => {
+          try {
+            const executeSupabase = createServerClient();
+            
+            // Call fn_delete_transaction RPC
+            const { error: rpcError } = await executeSupabase.rpc('fn_delete_transaction', {
+              p_tx_id: transactionId
+            });
+
+            if (rpcError) {
+              console.error('RPC Error deleting transaction:', rpcError);
+              return { success: false, error: rpcError.message };
+            }
+            
+            return { 
+              success: true, 
+              message: `Berhasil menghapus transaksi ${description ? `"${description}"` : ''} dengan ID ${transactionId}. Sampaikan konfirmasi ini kepada pengguna dengan ramah.`
             };
           } catch (err: any) {
             return { success: false, error: err.message };

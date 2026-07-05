@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase-server';
 import { formatRupiah } from '@/utils/format';
+import { getJakartaDate } from '@/utils/date';
 import { cookies } from 'next/headers';
 import { 
   ArrowUpRight, 
@@ -23,6 +24,11 @@ import { Progress } from '@/components/ui/progress';
 import { NetWorthChart, AllocationChart, ForecastChart } from '@/components/client/dashboard-charts';
 import ThresholdSetter from '@/components/client/threshold-setter';
 import AddAccountDialog from '@/components/client/add-account-dialog';
+import OptimizationEngineWidget from '@/components/client/optimization-engine-widget';
+import RoadmapTimelineWidget from '@/components/client/roadmap-timeline-widget';
+import InsightsWidget from '@/components/client/insights-widget';
+import BalanceEditor from '@/components/client/balance-editor';
+import AccountTableActions from '@/components/client/account-table-actions';
 
 export const revalidate = 0; // Live data
 
@@ -43,14 +49,10 @@ export default async function DashboardPage() {
 
   // 2. Fetch Transactions for calculations
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  const { year: yearNum, month: monthNum, dateString: todayStr, startOfMonthString: startOfMonth, endOfMonthString: endOfMonth } = getJakartaDate(now);
 
   // Fetch transactions for the last 30 days for running balance sparkline
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const todayStr = now.toISOString().split('T')[0];
-  const monthNum = now.getMonth() + 1;
-  const yearNum = now.getFullYear();
+  const thirtyDaysAgo = getJakartaDate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)).dateString;
 
   const [currentMonthRes, recentTxRes, budgetsRes, recurringRes] = await Promise.all([
     supabase
@@ -304,6 +306,15 @@ export default async function DashboardPage() {
         </div>
       )}
 
+      {/* AI Advisor / Optimization Engine Suggestion Widget */}
+      <OptimizationEngineWidget />
+
+      {/* AI Insights (Anomaly Detector & Balance Projection) */}
+      <InsightsWidget />
+
+      {/* Gamified Target Roadmap (iPhone 15 Pro for Yoga) */}
+      <RoadmapTimelineWidget />
+
       {/* Net Worth & Smart Allocation Grid */}
       <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
         {/* Net Worth Card (Spans 2 columns) */}
@@ -463,12 +474,7 @@ export default async function DashboardPage() {
         <div className="px-6 py-4 flex justify-between items-center border-b border-[#e2e8f0] bg-slate-50/10">
           <h3 className="text-sm font-bold text-black">Informasi Saldo Rekening</h3>
           <div className="flex space-x-1.5">
-            <button className="p-1.5 rounded-lg border border-[#e2e8f0] hover:bg-[#eceef0] transition-colors text-[#45464d] hover:text-black">
-              <ListFilter className="h-4 w-4" />
-            </button>
-            <button className="p-1.5 rounded-lg border border-[#e2e8f0] hover:bg-[#eceef0] transition-colors text-[#45464d] hover:text-black">
-              <Download className="h-4 w-4" />
-            </button>
+            <AccountTableActions accounts={accounts} />
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -498,7 +504,16 @@ export default async function DashboardPage() {
                     <td className="px-6 py-4 text-slate-500 font-medium hidden md:table-cell">
                       Limit Alert: {formatRupiah(parseFloat(acc.low_balance_threshold || '0'))}
                     </td>
-                    <td className="px-6 py-4 font-bold text-right font-mono text-black">{formatRupiah(balanceVal)}</td>
+                    <td className="px-6 py-4 font-bold text-right font-mono text-black">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span>{formatRupiah(balanceVal)}</span>
+                        <BalanceEditor 
+                          accountId={acc.id} 
+                          accountName={acc.name} 
+                          currentBalance={balanceVal} 
+                        />
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-right font-bold font-mono text-[#45464d] hidden sm:table-cell">{pct}%</td>
                     <td className="px-6 py-4 hidden sm:table-cell">
                       <div className="flex items-center gap-2">

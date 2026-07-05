@@ -51,15 +51,6 @@ export default function OptimizationEngineWidget() {
             {recommendation}
           </p>
         )}
-        
-        <div className="pt-4 flex flex-wrap gap-3">
-          <button className="bg-white hover:bg-white/90 text-[#131b2e] px-5 py-2.5 rounded-lg text-xs font-bold transition-all shadow active:scale-95">
-            Terapkan Optimasi
-          </button>
-          <button className="border border-white/20 text-white hover:bg-white/10 px-5 py-2.5 rounded-lg text-xs font-semibold transition-all active:scale-95">
-            Tinjau Rincian
-          </button>
-        </div>
       </div>
     </div>
   );
