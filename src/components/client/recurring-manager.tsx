@@ -74,6 +74,7 @@ export default function RecurringManager({ recurrings, accounts, categories, pro
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
   const [loadingPush, setLoadingPush] = useState(false);
   const [errorPush, setErrorPush] = useState<string | null>(null);
+  const [loadingTestPush, setLoadingTestPush] = useState(false);
 
   useEffect(() => {
     async function checkPushState() {
@@ -108,6 +109,25 @@ export default function RecurringManager({ recurrings, accounts, categories, pro
       setErrorPush(err.message || 'Gagal mengubah status notifikasi.');
     } finally {
       setLoadingPush(false);
+    }
+  };
+
+  const handleSendTestNotification = async () => {
+    setLoadingTestPush(true);
+    setErrorPush(null);
+    try {
+      const res = await fetch('/api/push/test', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal mengirim notifikasi uji coba.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setErrorPush(err.message || 'Gagal mengirim notifikasi uji coba.');
+    } finally {
+      setLoadingTestPush(false);
     }
   };
 
@@ -332,6 +352,18 @@ export default function RecurringManager({ recurrings, accounts, categories, pro
                 <span className="text-red-500 text-[9px] mt-0.5">Izin notifikasi diblokir browser</span>
               )}
             </div>
+            
+            {pushSubscribed && (
+              <button
+                onClick={handleSendTestNotification}
+                disabled={loadingTestPush || loadingPush}
+                className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all active:scale-95 flex items-center gap-1"
+                title="Kirim notifikasi uji coba instan"
+              >
+                {loadingTestPush ? <Loader2 className="h-3 w-3 animate-spin text-black" /> : <span>⚡ Test</span>}
+              </button>
+            )}
+
             <button
               onClick={handlePushToggle}
               disabled={loadingPush}
