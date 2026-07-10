@@ -84,8 +84,10 @@ export async function getPushSubscriptionState(): Promise<{
 }
 
 function urlBase64ToUint8Array(base64String: string) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  // Bersihkan tanda kutip (single/double quotes) dan spasi kosong yang mungkin terbawa saat salin-tempel
+  const cleaned = base64String.replace(/['"]/g, "").trim();
+  const padding = "=".repeat((4 - (cleaned.length % 4)) % 4);
+  const base64 = (cleaned + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = atob(base64);
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
 }
