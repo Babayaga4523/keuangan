@@ -18,6 +18,69 @@ export async function POST(req: Request) {
   try {
     const { messages, sessionId } = await req.json();
 
+    // 1. Validasi Berkas & Deteksi Duplikat di Sisi Server (Early Check)
+    if (messages && messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg.role === 'user' && lastMsg.experimental_attachments && lastMsg.experimental_attachments.length > 0) {
+        const imageAttachments = lastMsg.experimental_attachments.filter((att: any) => 
+          att.contentType?.startsWith('image/')
+        );
+
+        for (const att of imageAttachments) {
+          // Validasi Tipe File
+          const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+          if (!allowedTypes.includes(att.contentType)) {
+            return new Response(JSON.stringify({ error: `Format file ${att.contentType} tidak didukung.` }), { status: 400 });
+          }
+
+          // Validasi Ukuran File (Max 5MB)
+          const maxSizeBytes = 5 * 1024 * 1024;
+          const base64Length = att.url?.length || 0;
+          const approximateSize = (base64Length * 3) / 4;
+          if (approximateSize > maxSizeBytes) {
+            return new Response(JSON.stringify({ error: "Ukuran file terlalu besar (maksimal 5MB)." }), { status: 400 });
+          }
+
+          // Hitung Hash SHA-256 dari base64 gambar
+          const base64ImageOnly = att.url.split(';base64,').pop() || '';
+          const msgBuffer = new TextEncoder().encode(base64ImageOnly);
+          const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          const imageHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+          // Cek apakah hash sudah ada di database (receipt_logs)
+          let duplicate = null;
+          try {
+            const supabaseTemp = createServerClient();
+            const { data } = await supabaseTemp
+              .from('receipt_logs')
+              .select('id, transaction_id')
+              .eq('image_hash', imageHash)
+              .maybeSingle();
+            duplicate = data;
+          } catch (dbErr) {
+            console.warn('receipt_logs table check skipped or failed:', dbErr);
+          }
+
+          if (duplicate) {
+            // Early exit: stream warning message using custom ReadableStream
+            const warningText = '⚠️ **Duplikat Terdeteksi**\n\nStruk belanja ini sepertinya sudah pernah dicatat sebelumnya di sistem. Transaksi tidak akan diproses kembali untuk menghindari pencatatan ganda.';
+            const stream = new ReadableStream({
+              start(controller) {
+                controller.enqueue(new TextEncoder().encode(`0:${JSON.stringify(warningText)}\n`));
+                controller.close();
+              }
+            });
+            return new Response(stream, {
+              headers: {
+                'Content-Type': 'text/plain; charset=utf-8',
+              }
+            });
+          }
+        }
+      }
+    }
+
     const supabase = createServerClient();
     const cookieStore = await cookies();
     const profile = cookieStore.get('current_profile')?.value || 'silva';
@@ -117,8 +180,8 @@ export async function POST(req: Request) {
 
     // Ringkasan transaksi terbaru
     const recentSummary = allTransactions.length > 0
-      ? `\n## TRANSAKSI TERBARU (Maksimal 150):\n` +
-        allTransactions.slice(0, 150).map(t => {
+      ? `\n## TRANSAKSI TERBARU (Maksimal 30):\n` +
+        allTransactions.slice(0, 30).map(t => {
           const catName = dbCategories.find(c => c.id === t.category_id)?.name || 'Lainnya';
           return `- ID: ${t.id} | [${t.type}] ${t.description} (${catName}): **${formatRp(t.amount)}** (${t.transaction_date})`;
         }).join('\n')
@@ -290,9 +353,36 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
     }
 
     // Vercel AI SDK useChat automatically sends the FULL conversation history in `messages`.
-    // To prevent AI lag and save tokens on very long chats, we only send the last 20 messages for context.
-    const recentMessages = messages.slice(-20).map((msg: any) => {
-      // Normalize multimodal parts to standard Vercel AI SDK CoreMessage format
+    // To prevent AI lag and save tokens on very long chats, we only send the last 10 messages for context.
+    const recentMessages = messages.slice(-10).map((msg: any) => {
+      // If there are experimental attachments (specifically images), convert the message to a multimodal content array
+      if (msg.role === 'user' && msg.experimental_attachments && msg.experimental_attachments.length > 0) {
+        const imageAttachments = msg.experimental_attachments.filter((att: any) => 
+          att.contentType?.startsWith('image/')
+        );
+
+        if (imageAttachments.length > 0) {
+          const contentParts: any[] = [];
+          
+          if (msg.content) {
+            contentParts.push({ type: 'text', text: msg.content });
+          }
+          
+          imageAttachments.forEach((att: any) => {
+            contentParts.push({
+              type: 'image',
+              image: att.url // Base64 Data URL or string URL
+            });
+          });
+
+          return {
+            role: 'user',
+            content: contentParts
+          };
+        }
+      }
+
+      // Normalize standard multimodal parts to standard Vercel AI SDK CoreMessage format
       if (msg.role === 'user' && Array.isArray(msg.content)) {
         const newContent = msg.content.map((part: any) => {
           if (part.type === 'image_url' && part.image_url?.url) {
@@ -316,8 +406,15 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
     });
 
     const systemInstructions = systemPrompt + '\n\n' + 
+      '## FITUR PEMINDAI STRUK BELANJA (OCR STRUK)\n' +
+      '- Jika pengguna mengunggah gambar/struk belanja:\n' +
+      '  1. Evaluasi gambar tersebut. Jika gambar tersebut **bukan struk belanja/nota pengeluaran**, atau **sangat buram/tidak terbaca sama sekali**, kamu **DILARANG** memanggil tool apa pun dan wajib merespons langsung via teks dengan sopan, misalnya: "Saya melihat gambar yang Anda unggah, tetapi saya tidak dapat mendeteksi atau membacanya sebagai struk belanja yang valid. Mohon pastikan foto struk terlihat jelas dan beresolusi baik."\n' +
+      '  2. Jika gambar merupakan struk belanja yang valid, kamu wajib memanggil tool `extract_receipt_data` secara otomatis untuk mengekstrak data keuangan terstruktur.\n' +
+      '  3. **Penting**: Jangan pernah memanggil tool `add_transaction` secara langsung untuk struk belanja. Proses pencatatan struk harus melalui tool `extract_receipt_data` terlebih dahulu agar pengguna dapat memverifikasi datanya lewat kartu konfirmasi di UI.\n' +
+      '  4. Gunakan format mata uang Rupiah Indonesia: nominal berupa angka bulat bulat (integer) tanpa titik/koma desimal.\n' +
+      '  5. Setelah memanggil `extract_receipt_data` dan menerima hasilnya, sampaikan penjelasan ramah bahwa draf data struk belanja telah berhasil diekstrak dan minta pengguna untuk memeriksa dan menyimpannya melalui kartu konfirmasi yang muncul di bawah obrolan.\n\n' +
       '## ATURAN PEMICU AKSI (WAJIB DIPATUHI)\n' +
-      'Kamu HANYA boleh memanggil function/tool add_transaction, delete_transaction, create_transfer, atau add_saving_goal jika pesan user mengandung KATA KERJA IMPERATIF eksplisit yang secara langsung memerintahkan aksi, contoh: "catat", "tambahkan", "masukkan", "input", "simpan", "hapus", "batalkan", "hilangkan", "transfer", "pindahkan", "buat target".\n\n' +
+      'Kamu HANYA boleh memanggil function/tool add_transaction, delete_transaction, create_transfer, atau add_saving_goal jika pesan user mengandung KATA KERJA IMPERATIF eksplisit yang secara langsung memerintahkan aksi, contoh: "catat", "tambahkan", "masukkan", "input", "simpan", "hapus", "batalkan", "hilangkan", "transfer", "pindahkan", "buat target". *Khusus untuk pemindaian struk belanja di atas, kamu berhak memanggil tool `extract_receipt_data` secara otomatis tanpa perlu perintah teks tambahan.*\n\n' +
       'DILARANG memanggil function apapun jika user:\n' +
       '- Hanya bercerita/curhat tentang pengeluaran/pemasukan tanpa perintah ("tadi aku jajan kopi 20rb", "kemarin service motor abis 150rb")\n' +
       '- Menyebut angka sebagai konteks pertanyaan, bukan instruksi ("kalau aku beli motor 20 juta, aman gak?")\n' +
@@ -326,7 +423,7 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
       '- JANGAN langsung eksekusi function.\n' +
       '- Tanya konfirmasi dulu: "Mau aku catat sebagai transaksi ya?" atau konfirmasi yang setara.\n' +
       '- Baru panggil function SETELAH user menjawab ya/konfirmasi eksplisit di giliran (turn) berikutnya.\n\n' +
-      'Prioritaskan respons teks (empati/saran/analisis) sebagai default. Trigger function adalah PENGECUALIAN, bukan default behavior. Pikirkan langkah demi langkah secara logis sebelum memberikan jawaban yang melibatkan angka atau perhitungan.';
+      'Prioritaskan respons teks (empati/saran/analisis) as default. Trigger function adalah PENGECUALIAN, bukan default behavior. Pikirkan langkah demi langkah secara logis sebelum memberikan jawaban yang melibatkan angka atau perhitungan.';
 
     const onFinishCallback = async ({ text }: any) => {
       try {
@@ -344,6 +441,115 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
     };
 
     const chatTools = {
+      extract_receipt_data: tool({
+        description: 'Mengekstrak data terstruktur dari gambar struk belanja yang diunggah oleh pengguna. Tool ini HANYA mengembalikan data draf hasil OCR tanpa menyimpannya ke database langsung.',
+        parameters: jsonSchema({
+          type: 'object',
+          properties: {
+            merchant: { 
+              type: 'string', 
+              description: 'Nama merchant/toko (misal: Alfamart, Starbucks, SPBU Pertamina). Gunakan huruf kapital standar.' 
+            },
+            date: { 
+              type: 'string', 
+              description: 'Tanggal transaksi dalam format YYYY-MM-DD. Gunakan tanggal struk jika ada. Jika tidak tertera, gunakan tanggal hari ini.' 
+            },
+            amount: { 
+              type: 'integer', 
+              description: 'Total pengeluaran nominal dalam Rupiah (angka bulat positif, misal: 47500). Jangan sertakan desimal, koma, atau titik.' 
+            },
+            category: { 
+              type: 'string', 
+              enum: ['Makanan', 'Transportasi', 'Hiburan', 'Tagihan', 'Belanja', 'Lainnya'],
+              description: 'Kategori pengeluaran yang paling cocok.' 
+            },
+            confidence: { 
+              type: 'string', 
+              enum: ['high', 'low'], 
+              description: 'Tingkat kepercayaan pembacaan OCR. Gunakan "low" jika gambar buram, tidak lengkap, terpotong, atau ada keraguan.' 
+            },
+            items: {
+              type: 'array',
+              description: 'Daftar rincian barang/item belanja yang tertera pada struk.',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string', description: 'Nama item/barang' },
+                  price: { type: 'number', description: 'Harga per unit item' },
+                  qty: { type: 'integer', description: 'Jumlah kuantitas item' }
+                },
+                required: ['name', 'price']
+              }
+            }
+          },
+          required: ['merchant', 'date', 'amount', 'category', 'confidence']
+        }),
+        execute: async (args: any) => {
+          try {
+            // Dapatkan hash gambar secara dinamis dari request payload (untuk keamanan & integrasi database)
+            let imageBase64 = '';
+            if (messages && messages.length > 0) {
+              const lastMsg = messages[messages.length - 1];
+              if (lastMsg.role === 'user' && lastMsg.experimental_attachments && lastMsg.experimental_attachments.length > 0) {
+                const imgAtt = lastMsg.experimental_attachments.find((att: any) => 
+                  att.contentType?.startsWith('image/')
+                );
+                if (imgAtt) {
+                  imageBase64 = imgAtt.url.split(';base64,').pop() || '';
+                }
+              }
+            }
+
+            let imageHash = 'unknown';
+            if (imageBase64) {
+              const msgBuffer = new TextEncoder().encode(imageBase64);
+              const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+              const hashArray = Array.from(new Uint8Array(hashBuffer));
+              imageHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            }
+
+            const executeSupabase = createServerClient();
+            
+            // Cek duplikat di database (sekali lagi demi keamanan berlapis)
+            let duplicate = null;
+            try {
+              const { data } = await executeSupabase
+                .from('receipt_logs')
+                .select('id, transaction_id')
+                .eq('image_hash', imageHash)
+                .maybeSingle();
+              duplicate = data;
+            } catch (dbErr) {
+              console.warn('receipt_logs table check skipped or failed in tool:', dbErr);
+            }
+
+            if (duplicate) {
+              return {
+                isDuplicate: true,
+                message: 'Struk ini terdeteksi sebagai duplikat di database.'
+              };
+            }
+
+            return {
+              success: true,
+              isDuplicate: false,
+              draft: {
+                merchant: args.merchant,
+                date: args.date,
+                amount: args.amount,
+                category: args.category,
+                confidence: args.confidence,
+                items: args.items || [],
+                imageHash
+              }
+            };
+          } catch (err: any) {
+            console.error('Error executing extract_receipt_data:', err);
+            return { success: false, error: err.message };
+          }
+        }
+      }),
+
       add_transaction: tool({
         description: 'Mencatat transaksi keuangan baru ke database. PANGGIL HANYA jika user memberi perintah eksplisit dengan kata kerja imperatif: \'catat\', \'tambahkan\', \'input\', \'masukkan\', \'simpan\'. JANGAN panggil jika user hanya bercerita/curhat tentang pengeluaran tanpa menyuruh mencatat, atau menyebut angka sebagai bagian dari pertanyaan/simulasi. Jika ragu apakah ini perintah atau curhat, JANGAN panggil function ini — tanya konfirmasi ke user terlebih dahulu via teks.',
         parameters: jsonSchema({

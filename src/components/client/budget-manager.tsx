@@ -218,7 +218,7 @@ export default function BudgetManager({ categories, budgets, transactions, month
         {budgets.length === 0 ? (
           <div className="py-16 text-center">
             <p className="text-slate-400 text-sm">Belum ada budget yang diset untuk bulan ini.</p>
-            <p className="text-slate-300 text-xs mt-1">Klik "Tambah Budget" untuk mulai.</p>
+            <p className="text-slate-300 text-xs mt-1">Klik &quot;Tambah Budget&quot; untuk mulai.</p>
           </div>
         ) : (
           <div className="divide-y divide-[#e2e8f0]">

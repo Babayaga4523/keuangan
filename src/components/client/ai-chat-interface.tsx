@@ -21,9 +21,300 @@ const SUGGESTIONS = [
   { title: '💡 Saran Hemat Pengeluaran', desc: 'Dapatkan tips hemat konkret berdasarkan transaksi terakhir.', prompt: 'Berikan tips hemat berdasarkan pengeluaran saya.' }
 ];
 
-const MemoizedMessageBubble = React.memo(({ message, isStreaming }: { message: Message; isStreaming?: boolean }) => {
+const compressImageBase64 = (base64Str: string, maxWidth = 1600, maxHeight = 1600, quality = 0.75): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+
+      // Maintain aspect ratio while scaling to max 1600px width or height
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(base64Str);
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+      resolve(compressedDataUrl);
+    };
+    img.onerror = () => {
+      resolve(base64Str);
+    };
+  });
+};
+
+const ReceiptDraftCard = ({ 
+  toolInvocation, 
+  categories, 
+  onSave 
+}: { 
+  toolInvocation: any; 
+  categories: any[]; 
+  onSave: (toolCallId: string, data: any, imageHash: string) => Promise<boolean> 
+}) => {
+  const result = toolInvocation.result;
+  const draft = result?.draft;
+
+  const [merchant, setMerchant] = useState(draft?.merchant || '');
+  const [amount, setAmount] = useState(draft?.amount || 0);
+  const [category, setCategory] = useState(draft?.category || 'Belanja');
+  const [date, setDate] = useState(draft?.date || new Date().toISOString().split('T')[0]);
+  
+  // Local active accounts state to fetch live balances
+  const [localAccounts, setLocalAccounts] = useState<any[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState('');
+  const [isLoadingBalances, setIsLoadingBalances] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [isSaved, setIsSaved] = useState(false);
+
+  // Fetch live accounts and balances on card mount
+  useEffect(() => {
+    async function loadAccounts() {
+      setIsLoadingBalances(true);
+      try {
+        const { supabase } = await import('@/lib/supabase');
+        
+        // Helper to get cookie profile
+        const getCookie = (name: string) => {
+          const value = `; ${document.cookie}`;
+          const parts = value.split(`; ${name}=`);
+          if (parts.length === 2) return parts.pop()?.split(';').shift();
+          return undefined;
+        };
+        const profile = getCookie('current_profile') || 'silva';
+
+        const { data, error } = await supabase
+          .from('accounts')
+          .select('id, name, balance, type')
+          .eq('profile', profile)
+          .eq('is_active', true);
+
+        if (error) throw error;
+        if (data) {
+          setLocalAccounts(data);
+          // Auto select CASH or first active account
+          const defaultAcc = data.find((a: any) => a.type === 'CASH') || data[0];
+          if (defaultAcc) {
+            setSelectedAccount(defaultAcc.id);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load accounts for receipt draft card:', err);
+      } finally {
+        setIsLoadingBalances(false);
+      }
+    }
+    
+    if (toolInvocation.state === 'result' && draft) {
+      loadAccounts();
+    }
+  }, [toolInvocation.state, draft]);
+
+  if (toolInvocation.state !== 'result' || !result) {
+    return (
+      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-2 text-xs text-slate-500 max-w-sm w-full">
+        <Loader2 className="h-4 w-4 animate-spin text-black" />
+        <span>Mengekstrak data struk...</span>
+      </div>
+    );
+  }
+
+  if (result.isDuplicate) {
+    return (
+      <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs max-w-sm w-full space-y-1">
+        <p className="font-bold flex items-center gap-1">⚠️ Duplikat Terdeteksi</p>
+        <p>Struk belanja ini sepertinya sudah pernah dicatat sebelumnya di sistem.</p>
+      </div>
+    );
+  }
+
+  if (!draft) return null;
+
+  const handleConfirm = async () => {
+    setIsSaving(true);
+    setSaveError('');
+    try {
+      const success = await onSave(toolInvocation.toolCallId, {
+        merchant,
+        amount: Number(amount),
+        category,
+        date,
+        accountId: selectedAccount,
+        items: draft.items || []
+      }, draft.imageHash);
+      if (success) {
+        setIsSaved(true);
+      }
+    } catch (err: any) {
+      setSaveError(err.message || 'Gagal menyimpan transaksi.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isSaved) {
+    return (
+      <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs max-w-sm w-full space-y-1">
+        <p className="font-bold">✅ Transaksi Tersimpan</p>
+        <p className="font-semibold">{merchant} • Rp {amount.toLocaleString('id-ID')} ({category})</p>
+      </div>
+    );
+  }
+
+  const isLowConfidence = draft.confidence === 'low';
+
+  return (
+    <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs text-xs space-y-3.5 max-w-sm w-full mt-2 text-slate-800">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+        <span className="font-bold text-black text-sm">📋 Konfirmasi Draf Struk</span>
+        {isLowConfidence && (
+          <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-bold text-[9px] border border-amber-200">
+            ⚠️ Cek Ulang (Gambar Buram)
+          </span>
+        )}
+      </div>
+
+      {saveError && (
+        <div className="p-2 bg-red-50 text-red-800 rounded-lg text-[10px] border border-red-100">
+          {saveError}
+        </div>
+      )}
+
+      <div className="space-y-2.5">
+        {/* Merchant */}
+        <div className="flex flex-col gap-0.5">
+          <label className="font-semibold text-slate-500 uppercase text-[9px]">Merchant / Toko</label>
+          <input 
+            type="text" 
+            value={merchant} 
+            onChange={e => setMerchant(e.target.value)}
+            className="w-full px-2.5 py-1 border border-slate-200 rounded-lg focus:outline-none focus:border-black text-black bg-slate-50"
+          />
+        </div>
+
+        {/* Amount */}
+        <div className="flex flex-col gap-0.5">
+          <label className="font-semibold text-slate-500 uppercase text-[9px]">Nominal (Rupiah)</label>
+          <input 
+            type="number" 
+            value={amount} 
+            onChange={e => setAmount(Number(e.target.value))}
+            className="w-full px-2.5 py-1 border border-slate-200 rounded-lg focus:outline-none focus:border-black font-semibold text-black bg-slate-50"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          {/* Category */}
+          <div className="flex flex-col gap-0.5">
+            <label className="font-semibold text-slate-500 uppercase text-[9px]">Kategori</label>
+            <select
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              className="w-full px-2 py-1 border border-slate-200 rounded-lg focus:outline-none focus:border-black text-black bg-slate-50"
+            >
+              {['Makanan', 'Transportasi', 'Hiburan', 'Tagihan', 'Belanja', 'Lainnya'].map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Date */}
+          <div className="flex flex-col gap-0.5">
+            <label className="font-semibold text-slate-500 uppercase text-[9px]">Tanggal</label>
+            <input 
+              type="date" 
+              value={date} 
+              onChange={e => setDate(e.target.value)}
+              className="w-full px-2 py-0.5 border border-slate-200 rounded-lg focus:outline-none focus:border-black text-black bg-slate-50"
+            />
+          </div>
+        </div>
+
+        {/* Account Dropdown */}
+        <div className="flex flex-col gap-0.5">
+          <label className="font-semibold text-slate-500 uppercase text-[9px]">Pilih Rekening</label>
+          {isLoadingBalances ? (
+            <div className="h-8 border border-slate-200 rounded-lg flex items-center justify-center bg-slate-50">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+            </div>
+          ) : (
+            <select
+              value={selectedAccount}
+              onChange={e => setSelectedAccount(e.target.value)}
+              className="w-full px-2.5 py-1 border border-slate-200 rounded-lg focus:outline-none focus:border-black text-black bg-slate-50"
+            >
+              {localAccounts.map(acc => (
+                <option key={acc.id} value={acc.id}>{acc.name} (Rp {parseFloat(acc.balance).toLocaleString('id-ID')})</option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {/* Item List Breakdown */}
+        {draft.items && draft.items.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-slate-100">
+            <label className="font-semibold text-slate-500 uppercase text-[9px] block mb-1">Rincian Barang</label>
+            <div className="bg-slate-50/50 rounded-lg p-2 max-h-24 overflow-y-auto space-y-1 border border-slate-100">
+              {draft.items.map((item: any, idx: number) => (
+                <div key={idx} className="flex justify-between text-[10px] text-slate-600 font-medium">
+                  <span className="truncate pr-2">{item.name} {item.qty > 1 ? `x${item.qty}` : ''}</span>
+                  <span className="font-mono text-slate-900 shrink-0">Rp {(item.price * (item.qty || 1)).toLocaleString('id-ID')}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="pt-1.5 flex gap-2">
+        <button
+          type="button"
+          disabled={isSaving || !selectedAccount}
+          onClick={handleConfirm}
+          className="flex-1 py-1.5 px-3 bg-black hover:bg-black/90 text-white font-bold rounded-lg text-center transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 active:scale-98"
+        >
+          {isSaving ? <Loader2 className="h-3 w-3 animate-spin text-white" /> : null}
+          <span>Simpan Transaksi</span>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const MemoizedMessageBubble = React.memo(({ 
+  message, 
+  isStreaming,
+  categories,
+  onSaveTransaction
+}: { 
+  message: Message; 
+  isStreaming?: boolean;
+  categories: any[];
+  onSaveTransaction: (toolCallId: string, draftData: any, imageHash: string) => Promise<boolean>;
+}) => {
   const isUser = message.role === 'user';
   const timeLabel = isUser ? 'You • Baru saja' : 'Opin AI • Baru saja';
+  const toolInvocations = (message as any).toolInvocations || [];
 
   return (
     <div className={`flex gap-2.5 sm:gap-4 group ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -99,6 +390,26 @@ const MemoizedMessageBubble = React.memo(({ message, isStreaming }: { message: M
             </div>
           )}
         </div>
+
+        {/* Custom tool card below the assistant bubble */}
+        {!isUser && toolInvocations.length > 0 && (
+          <div className="w-full flex flex-col items-start mt-2">
+            {toolInvocations.map((toolInv: any) => {
+              if (toolInv.toolName === 'extract_receipt_data') {
+                return (
+                  <ReceiptDraftCard 
+                    key={toolInv.toolCallId}
+                    toolInvocation={toolInv} 
+                    categories={categories}
+                    onSave={onSaveTransaction}
+                  />
+                );
+              }
+              return null;
+            })}
+          </div>
+        )}
+
         <span className={`text-[10px] text-[#76777d] mt-1 block font-medium ${isUser ? 'mr-1 text-right' : 'ml-1'}`}>
           {timeLabel}
         </span>
@@ -111,6 +422,7 @@ const MemoizedMessageBubble = React.memo(({ message, isStreaming }: { message: M
   prevProps.isStreaming === nextProps.isStreaming &&
   prevProps.message.experimental_attachments?.length === nextProps.message.experimental_attachments?.length
 );
+MemoizedMessageBubble.displayName = 'MemoizedMessageBubble';
 
 export default function AiChatInterface() {
   const [currentSessionId, setCurrentSessionId] = useState<string>('default');
@@ -118,7 +430,95 @@ export default function AiChatInterface() {
   const [sidebarOpen, setSidebarOpen] = useState(false); // start closed by default
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages, error, setInput } = useChat({
+  const [categories, setCategories] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const { supabase } = await import('@/lib/supabase');
+        const { data } = await supabase
+          .from('categories')
+          .select('id, name, type');
+        if (data) setCategories(data);
+      } catch (err) {
+        console.error('Failed to load categories:', err);
+      }
+    }
+    loadCategories();
+  }, []);
+
+  const handleSaveReceiptTransaction = async (toolCallId: string, draftData: any, imageHash: string) => {
+    try {
+      // Find category ID that matches category name
+      let categoryId = '';
+      if (categories.length > 0) {
+        const catNameLower = draftData.category.toLowerCase();
+        const matchedCat = categories.find((c: any) => 
+          c.type === 'EXPENSE' && 
+          (c.name.toLowerCase().includes(catNameLower) || catNameLower.includes(c.name.toLowerCase()))
+        );
+        if (matchedCat) categoryId = matchedCat.id;
+      }
+
+      // 1. Call actionCreateTransaction server action
+      const { actionCreateTransaction } = await import('@/lib/actions');
+      
+      const descItems = draftData.items && draftData.items.length > 0
+        ? draftData.items.map((i: any) => `${i.name} (x${i.qty || 1})`).join(', ')
+        : '';
+      const description = `[OCR] ${draftData.merchant}${descItems ? `: ${descItems}` : ''}`;
+
+      const res = await actionCreateTransaction({
+        accountId: draftData.accountId,
+        categoryId: categoryId || undefined,
+        amount: draftData.amount,
+        type: 'EXPENSE',
+        description,
+        date: draftData.date
+      });
+
+      if (!res.success) {
+        throw new Error(res.error || 'Gagal menyimpan transaksi.');
+      }
+
+      // 2. Insert receipt log to database using client-side Supabase
+      const { supabase } = await import('@/lib/supabase');
+      const getCookie = (name: string) => {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop()?.split(';').shift();
+        return undefined;
+      };
+      const profile = getCookie('current_profile') || 'silva';
+
+      // Insert receipt log (we can ignore errors if table isn't migrated)
+      try {
+        await supabase
+          .from('receipt_logs')
+          .insert({
+            image_hash: imageHash,
+            transaction_id: res.data?.id,
+            profile
+          });
+      } catch (logErr) {
+        console.warn('Failed to insert receipt log:', logErr);
+      }
+
+      // Notify Opin via append
+      append({
+        role: 'user',
+        content: `Saya telah menyetujui draf struk dari ${draftData.merchant} sebesar Rp ${draftData.amount.toLocaleString('id-ID')} kategori ${draftData.category} untuk dicatat.`
+      });
+      
+      return true;
+    } catch (err: any) {
+      console.error('Error saving receipt transaction:', err);
+      alert(err.message || 'Terjadi kesalahan saat menyimpan transaksi.');
+      return false;
+    }
+  };
+
+  const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages, error, setInput, append } = useChat({
     api: '/api/chat',
     body: { sessionId: currentSessionId },
     initialMessages: [],
@@ -134,6 +534,13 @@ export default function AiChatInterface() {
   const chatCanvasRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const scrollToBottom = () => {
+    if (chatCanvasRef.current) {
+      chatCanvasRef.current.scrollTop = chatCanvasRef.current.scrollHeight;
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+  };
   const recognitionRef = useRef<any>(null);
 
   const messagesRef = useRef(messages);
@@ -171,19 +578,34 @@ export default function AiChatInterface() {
     const files = Array.from(e.target.files);
     
     files.forEach(file => {
-      if (file.size > 4 * 1024 * 1024) {
-        alert(`Berkas ${file.name} melebihi batas ukuran 4MB.`);
+      if (!file.type.startsWith('image/')) {
+        alert(`Berkas ${file.name} bukan gambar.`);
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`Berkas ${file.name} terlalu besar (maksimal 10MB).`);
         return;
       }
       
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onloadend = async () => {
         const base64 = reader.result as string;
-        setAttachments(prev => [...prev, {
-          url: base64,
-          name: file.name,
-          contentType: file.type
-        }]);
+        try {
+          const compressedBase64 = await compressImageBase64(base64);
+          setAttachments(prev => [...prev, {
+            url: compressedBase64,
+            name: file.name,
+            contentType: 'image/jpeg'
+          }]);
+        } catch (err) {
+          console.error('Compression failed, using original:', err);
+          setAttachments(prev => [...prev, {
+            url: base64,
+            name: file.name,
+            contentType: file.type
+          }]);
+        }
       };
       reader.readAsDataURL(file);
     });
@@ -202,19 +624,29 @@ export default function AiChatInterface() {
         const file = item.getAsFile();
         if (!file) continue;
 
-        if (file.size > 4 * 1024 * 1024) {
-          alert(`Berkas ${file.name} melebihi batas ukuran 4MB.`);
+        if (file.size > 10 * 1024 * 1024) {
+          alert(`Berkas ${file.name} terlalu besar (maksimal 10MB).`);
           continue;
         }
 
         const reader = new FileReader();
-        reader.onloadend = () => {
+        reader.onloadend = async () => {
           const base64 = reader.result as string;
-          setAttachments(prev => [...prev, {
-            url: base64,
-            name: file.name || `Pasted_Image_${Date.now()}.png`,
-            contentType: file.type
-          }]);
+          try {
+            const compressedBase64 = await compressImageBase64(base64);
+            setAttachments(prev => [...prev, {
+              url: compressedBase64,
+              name: file.name || `Pasted_Image_${Date.now()}.png`,
+              contentType: 'image/jpeg'
+            }]);
+          } catch (err) {
+            console.error('Compression failed, using original:', err);
+            setAttachments(prev => [...prev, {
+              url: base64,
+              name: file.name || `Pasted_Image_${Date.now()}.png`,
+              contentType: file.type
+            }]);
+          }
         };
         reader.readAsDataURL(file);
       }
@@ -351,13 +783,6 @@ export default function AiChatInterface() {
 
     fetchHistoryAndSessions();
   }, [setMessages]);
-
-  const scrollToBottom = () => {
-    if (chatCanvasRef.current) {
-      chatCanvasRef.current.scrollTop = chatCanvasRef.current.scrollHeight;
-    }
-    messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
-  };
 
   const handleScroll = () => {
     if (!chatCanvasRef.current) return;
@@ -583,6 +1008,8 @@ export default function AiChatInterface() {
                       key={message.id} 
                       message={message} 
                       isStreaming={isLoading && idx === messages.length - 1 && message.role === 'assistant'}
+                      categories={categories}
+                      onSaveTransaction={handleSaveReceiptTransaction}
                     />
                   ))}
                   

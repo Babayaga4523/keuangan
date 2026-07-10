@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -68,6 +68,48 @@ export default function RecurringManager({ recurrings, accounts, categories, pro
   const [executingId, setExecutingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
+  const [loadingPush, setLoadingPush] = useState(false);
+  const [errorPush, setErrorPush] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function checkPushState() {
+      try {
+        const { getPushSubscriptionState } = await import('@/lib/push-subscribe');
+        const state = await getPushSubscriptionState();
+        setPushSupported(state.supported);
+        setPushSubscribed(state.subscribed);
+        setPushPermission(state.permission);
+      } catch (err) {
+        console.error('Failed to get push state:', err);
+      }
+    }
+    checkPushState();
+  }, []);
+
+  const handlePushToggle = async () => {
+    setLoadingPush(true);
+    setErrorPush(null);
+    try {
+      const { subscribeToPush, unsubscribeFromPush } = await import('@/lib/push-subscribe');
+      if (pushSubscribed) {
+        await unsubscribeFromPush();
+        setPushSubscribed(false);
+      } else {
+        await subscribeToPush();
+        setPushSubscribed(true);
+        setPushPermission('granted');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setErrorPush(err.message || 'Gagal mengubah status notifikasi.');
+    } finally {
+      setLoadingPush(false);
+    }
+  };
 
   const [type, setType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE');
   const [accountId, setAccountId] = useState('');
@@ -258,6 +300,54 @@ export default function RecurringManager({ recurrings, accounts, categories, pro
         </Dialog>
       </div>
 
+      {/* Push Notification Banner */}
+      {pushSupported && (
+        <div className="bg-white border border-[#e2e8f0] rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs">
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-black flex items-center gap-1.5">
+              <span className="text-base">🔔</span>
+              Pengingat Tagihan (Push Notification)
+            </h3>
+            <p className="text-xs text-slate-500">
+              Dapatkan pemberitahuan otomatis H-3, H-1, dan H-0 sebelum tagihan jatuh tempo langsung di perangkat Anda.
+            </p>
+            {errorPush && (
+              <p className="text-[10px] text-red-600 font-semibold mt-1">⚠️ {errorPush}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="flex flex-col items-end text-[10px] font-medium text-slate-400">
+              <span className="flex items-center gap-1">
+                Status: 
+                {pushSubscribed ? (
+                  <span className="inline-flex items-center gap-1 text-emerald-600 font-bold">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Aktif
+                  </span>
+                ) : (
+                  <span className="text-slate-400">Nonaktif</span>
+                )}
+              </span>
+              {pushPermission === 'denied' && (
+                <span className="text-red-500 text-[9px] mt-0.5">Izin notifikasi diblokir browser</span>
+              )}
+            </div>
+            <button
+              onClick={handlePushToggle}
+              disabled={loadingPush}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all active:scale-95 flex items-center gap-1.5 ${
+                pushSubscribed
+                  ? 'border-red-200 text-red-600 bg-red-50/50 hover:bg-red-50'
+                  : 'border-slate-200 text-slate-700 bg-white hover:bg-slate-50'
+              }`}
+            >
+              {loadingPush && <Loader2 className="h-3 w-3 animate-spin" />}
+              <span>{pushSubscribed ? 'Nonaktifkan' : 'Aktifkan Pengingat'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Due Today Alert */}
       {dueToday.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
@@ -282,7 +372,7 @@ export default function RecurringManager({ recurrings, accounts, categories, pro
         {recurrings.length === 0 ? (
           <div className="py-16 text-center">
             <p className="text-slate-400 text-sm">Belum ada transaksi berulang.</p>
-            <p className="text-slate-300 text-xs mt-1">Klik "Tambah Recurring" untuk mulai.</p>
+            <p className="text-slate-300 text-xs mt-1">Klik &quot;Tambah Recurring&quot; untuk mulai.</p>
           </div>
         ) : (
           <div className="divide-y divide-[#e2e8f0]">

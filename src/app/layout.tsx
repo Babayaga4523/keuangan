@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/sidebar";
+import ServiceWorkerRegister from "@/components/service-worker-register";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -21,6 +22,7 @@ export default function RootLayout({
   return (
     <html lang="id" className="h-full scroll-smooth">
       <body className={`${inter.variable} font-sans min-h-screen bg-[#f7f9fb] text-[#191c1e] antialiased`}>
+        <ServiceWorkerRegister />
         <div className="flex min-h-screen flex-col md:flex-row">
           <Sidebar />
           <main className="flex-1 md:pl-64 pt-16 md:pt-0">
