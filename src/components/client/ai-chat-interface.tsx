@@ -87,39 +87,34 @@ const ReceiptDraftCard = ({
   const [saveError, setSaveError] = useState('');
   const [isSaved, setIsSaved] = useState(false);
 
+  // Sync draft data when loaded/changed
+  useEffect(() => {
+    if (draft) {
+      setMerchant(draft.merchant || '');
+      setAmount(draft.amount || 0);
+      setCategory(draft.category || 'Belanja');
+      setDate(draft.date || new Date().toISOString().split('T')[0]);
+    }
+  }, [draft]);
+
   // Fetch live accounts and balances on card mount
   useEffect(() => {
     async function loadAccounts() {
       setIsLoadingBalances(true);
       try {
-        const { supabase } = await import('@/lib/supabase');
+        const res = await fetch('/api/accounts');
+        if (!res.ok) throw new Error('Gagal mengambil data rekening dari server.');
+        const resultData = await res.json();
+        const data = resultData.accounts || [];
         
-        // Helper to get cookie profile
-        const getCookie = (name: string) => {
-          const value = `; ${document.cookie}`;
-          const parts = value.split(`; ${name}=`);
-          if (parts.length === 2) return parts.pop()?.split(';').shift();
-          return undefined;
-        };
-        const profile = getCookie('current_profile') || 'silva';
-
-        const { data, error } = await supabase
-          .from('accounts')
-          .select('id, name, balance, type')
-          .eq('profile', profile)
-          .eq('is_active', true);
-
-        if (error) throw error;
-        if (data) {
-          setLocalAccounts(data);
-          // Auto select CASH or first active account
-          const defaultAcc = data.find((a: any) => a.type === 'CASH') || data[0];
-          if (defaultAcc) {
-            setSelectedAccount(defaultAcc.id);
-          }
+        setLocalAccounts(data);
+        // Auto select CASH or first active account
+        const defaultAcc = data.find((a: any) => a.type === 'CASH') || data[0];
+        if (defaultAcc) {
+          setSelectedAccount(defaultAcc.id);
         }
-      } catch (err) {
-        console.error('Failed to load accounts for receipt draft card:', err);
+      } catch (err: any) {
+        console.error('Failed to load accounts for receipt draft card:', err?.message || err);
       } finally {
         setIsLoadingBalances(false);
       }
@@ -184,7 +179,7 @@ const ReceiptDraftCard = ({
   const isLowConfidence = draft.confidence === 'low';
 
   return (
-    <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs text-xs space-y-3.5 max-w-sm w-full mt-2 text-slate-800">
+    <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs text-xs space-y-3.5 min-w-[300px] sm:min-w-[340px] max-w-sm w-full mt-2 text-slate-800">
       <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
         <span className="font-bold text-black text-sm">📋 Konfirmasi Draf Struk</span>
         {isLowConfidence && (
@@ -433,18 +428,18 @@ export default function AiChatInterface() {
   const [categories, setCategories] = useState<any[]>([]);
 
   useEffect(() => {
-    async function loadCategories() {
+    async function loadInitData() {
       try {
-        const { supabase } = await import('@/lib/supabase');
-        const { data } = await supabase
-          .from('categories')
-          .select('id, name, type');
-        if (data) setCategories(data);
+        const res = await fetch('/api/accounts');
+        if (res.ok) {
+          const result = await res.json();
+          if (result.categories) setCategories(result.categories);
+        }
       } catch (err) {
-        console.error('Failed to load categories:', err);
+        console.error('Failed to load initial data:', err);
       }
     }
-    loadCategories();
+    loadInitData();
   }, []);
 
   const handleSaveReceiptTransaction = async (toolCallId: string, draftData: any, imageHash: string) => {
@@ -481,25 +476,21 @@ export default function AiChatInterface() {
         throw new Error(res.error || 'Gagal menyimpan transaksi.');
       }
 
-      // 2. Insert receipt log to database using client-side Supabase
-      const { supabase } = await import('@/lib/supabase');
-      const getCookie = (name: string) => {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop()?.split(';').shift();
-        return undefined;
-      };
-      const profile = getCookie('current_profile') || 'silva';
-
-      // Insert receipt log (we can ignore errors if table isn't migrated)
+      // 2. Insert receipt log to database using backend API
       try {
-        await supabase
-          .from('receipt_logs')
-          .insert({
-            image_hash: imageHash,
-            transaction_id: res.data?.id,
-            profile
-          });
+        await fetch('/api/receipts/log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageHash,
+            transactionId: res.data?.id,
+            merchant: draftData.merchant,
+            amount: draftData.amount,
+            category: draftData.category,
+            date: draftData.date,
+            items: draftData.items || []
+          })
+        });
       } catch (logErr) {
         console.warn('Failed to insert receipt log:', logErr);
       }
@@ -711,12 +702,17 @@ export default function AiChatInterface() {
     e.preventDefault();
     if (!input.trim() && attachments.length === 0) return;
     
-    if (attachments.length > 0) {
-      handleSubmit(e, {
-        experimental_attachments: attachments as any
-      });
+    if (attachments.length > 0 && !input.trim()) {
+      setInput("Tolong periksa dan analisis struk belanja ini.");
+      setTimeout(() => {
+        handleSubmit(e, {
+          experimental_attachments: attachments as any
+        });
+      }, 30);
     } else {
-      handleSubmit(e);
+      handleSubmit(e, {
+        experimental_attachments: attachments.length > 0 ? (attachments as any) : undefined
+      });
     }
     setAttachments([]);
   };

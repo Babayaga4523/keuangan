@@ -13,8 +13,9 @@ export async function subscribeToPush() {
   }
 
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  if (!publicKey) {
-    throw new Error("VAPID Public Key tidak terkonfigurasi di env.");
+  console.log("DEBUG: VAPID Public Key loaded in browser:", publicKey);
+  if (!publicKey || publicKey === "undefined" || publicKey === "null" || publicKey === "") {
+    throw new Error("VAPID Public Key tidak terkonfigurasi di env (atau bernilai undefined). Silakan restart server Next.js Anda (Ctrl+C lalu npm run dev) agar env baru dimuat.");
   }
 
   const subscription = await registration.pushManager.subscribe({

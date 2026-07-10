@@ -354,14 +354,17 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
 
     // Vercel AI SDK useChat automatically sends the FULL conversation history in `messages`.
     // To prevent AI lag and save tokens on very long chats, we only send the last 10 messages for context.
-    const recentMessages = messages.slice(-10).map((msg: any) => {
+    const recentMessages = messages.slice(-10).map((msg: any, idx: number, arr: any[]) => {
+      const isLastMessage = idx === arr.length - 1;
+
       // If there are experimental attachments (specifically images), convert the message to a multimodal content array
       if (msg.role === 'user' && msg.experimental_attachments && msg.experimental_attachments.length > 0) {
         const imageAttachments = msg.experimental_attachments.filter((att: any) => 
           att.contentType?.startsWith('image/')
         );
 
-        if (imageAttachments.length > 0) {
+        // ONLY send images for the CURRENT (last) user message to prevent model confusion and save token costs!
+        if (imageAttachments.length > 0 && isLastMessage) {
           const contentParts: any[] = [];
           
           if (msg.content) {
@@ -379,21 +382,39 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
             role: 'user',
             content: contentParts
           };
+        } else {
+          // For past history messages, strip the heavy images and just keep the text
+          return {
+            role: 'user',
+            content: msg.content || "Tolong periksa dan analisis struk belanja ini."
+          };
         }
       }
 
       // Normalize standard multimodal parts to standard Vercel AI SDK CoreMessage format
       if (msg.role === 'user' && Array.isArray(msg.content)) {
-        const newContent = msg.content.map((part: any) => {
-          if (part.type === 'image_url' && part.image_url?.url) {
-            return {
-              type: 'image',
-              image: part.image_url.url
-            };
-          }
-          return part;
-        });
-        return { ...msg, content: newContent };
+        if (isLastMessage) {
+          const newContent = msg.content.map((part: any) => {
+            if (part.type === 'image_url' && part.image_url?.url) {
+              return {
+                type: 'image',
+                image: part.image_url.url
+              };
+            }
+            return part;
+          });
+          return { ...msg, content: newContent };
+        } else {
+          // For past history messages, extract only text parts
+          const textContent = msg.content
+            .filter((part: any) => part.type === 'text')
+            .map((part: any) => part.text)
+            .join('\n');
+          return {
+            role: 'user',
+            content: textContent || "Tolong periksa dan analisis struk belanja ini."
+          };
+        }
       }
       return msg;
     });
