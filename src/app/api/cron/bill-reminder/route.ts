@@ -19,10 +19,14 @@ export async function GET(req: Request) {
     }
 
     // 3. Konfigurasi VAPID Details
+    const subject = (process.env.VAPID_SUBJECT || '').replace(/['"]/g, "").trim();
+    const publicKey = (process.env.VAPID_PUBLIC_KEY || '').replace(/['"]/g, "").trim();
+    const privateKey = (process.env.VAPID_PRIVATE_KEY || '').replace(/['"]/g, "").trim();
+
     webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT || 'mailto:admin@amanahfinance.com',
-      process.env.VAPID_PUBLIC_KEY || '',
-      process.env.VAPID_PRIVATE_KEY || ''
+      subject || 'mailto:admin@amanahfinance.com',
+      publicKey,
+      privateKey
     );
 
     const supabase = createServerClient();
