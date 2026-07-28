@@ -197,6 +197,7 @@ export async function POST(req: Request) {
   * 🌐 Internet & Tagihan: **${formatRp(userParams.expenses?.internetBill || 0)}**
   * ☕ Uang Jajan / Operasional: **${formatRp(userParams.expenses?.pocketMoney || 0)}**
   * 📦 Pengeluaran Lainnya: **${formatRp(userParams.expenses?.otherExpenses || 0)}**
+${Array.isArray(userParams.expenses?.customExpenses) && userParams.expenses.customExpenses.length > 0 ? userParams.expenses.customExpenses.map((c: any) => `  * 🏷️ ${c.name}: **${formatRp(c.amount || 0)}**`).join('\n') : ''}
 ` : '';
 
     // Ringkasan transaksi terbaru

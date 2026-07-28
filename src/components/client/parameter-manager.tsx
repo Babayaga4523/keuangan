@@ -22,7 +22,10 @@ import {
   CheckCircle2, 
   AlertCircle,
   TrendingUp,
-  PieChart
+  PieChart,
+  Plus,
+  Trash2,
+  Tag
 } from 'lucide-react';
 import { 
   Select, 
@@ -31,7 +34,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '../ui/select';
-import { actionSaveUserParameters, type UserParametersData } from '@/lib/actions';
+import { actionSaveUserParameters, type UserParametersData, type CustomExpenseItem } from '@/lib/actions';
 import { useRouter } from 'next/navigation';
 
 interface Account {
@@ -69,6 +72,25 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
   const [pocketMoney, setPocketMoney] = useState(initialParameters?.expenses?.pocketMoney ? initialParameters.expenses.pocketMoney.toString() : '1500000');
   const [otherExpenses, setOtherExpenses] = useState(initialParameters?.expenses?.otherExpenses ? initialParameters.expenses.otherExpenses.toString() : '300000');
 
+  // Dynamic Custom Expenses State
+  const [customExpenses, setCustomExpenses] = useState<Array<{ id: string; name: string; amount: string }>>(
+    initialParameters?.expenses?.customExpenses && initialParameters.expenses.customExpenses.length > 0
+      ? initialParameters.expenses.customExpenses.map(c => ({ id: c.id || Math.random().toString(), name: c.name, amount: c.amount.toString() }))
+      : []
+  );
+
+  const handleAddCustomExpense = () => {
+    setCustomExpenses(prev => [...prev, { id: Date.now().toString(), name: '', amount: '' }]);
+  };
+
+  const handleRemoveCustomExpense = (id: string) => {
+    setCustomExpenses(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleCustomExpenseChange = (id: string, field: 'name' | 'amount', value: string) => {
+    setCustomExpenses(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+  };
+
   // Calculations
   const salaryNum = parseFormattedNumber(salary);
   const savingsNum = parseFormattedNumber(savingsGoal);
@@ -80,7 +102,12 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
   const pocketNum = parseFormattedNumber(pocketMoney);
   const otherNum = parseFormattedNumber(otherExpenses);
 
-  const totalExpensesNum = parentNum + motorNum + fuelNum + bpjsNum + internetNum + pocketNum + otherNum;
+  const customExpensesTotalNum = customExpenses.reduce(
+    (acc, curr) => acc + parseFormattedNumber(curr.amount), 
+    0
+  );
+
+  const totalExpensesNum = parentNum + motorNum + fuelNum + bpjsNum + internetNum + pocketNum + otherNum + customExpensesTotalNum;
   const netSurplusNum = salaryNum - (totalExpensesNum + savingsNum);
 
   const savingsPct = salaryNum > 0 ? ((savingsNum / salaryNum) * 100).toFixed(1) : '0';
@@ -92,6 +119,14 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
     setSaving(true);
     setSuccessMsg(null);
     setErrorMsg(null);
+
+    const formattedCustomExpenses: CustomExpenseItem[] = customExpenses
+      .filter(c => c.name.trim() !== '')
+      .map(c => ({
+        id: c.id,
+        name: c.name.trim(),
+        amount: parseFormattedNumber(c.amount)
+      }));
 
     const payload: UserParametersData = {
       monthlySalary: salaryNum,
@@ -105,7 +140,8 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
         bpjsHealth: bpjsNum,
         internetBill: internetNum,
         pocketMoney: pocketNum,
-        otherExpenses: otherNum
+        otherExpenses: otherNum,
+        customExpenses: formattedCustomExpenses
       }
     };
 
@@ -426,6 +462,74 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
               </div>
             </div>
           </div>
+
+          {/* Dynamic Custom Expenses Section */}
+          <div className="mt-6 pt-6 border-t border-[#e2e8f0]">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-bold text-black flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-purple-600" />
+                  Pengeluaran Kustom / Tambahan Khusus
+                </h3>
+                <p className="text-xs text-[#45464d] mt-0.5">
+                  Tambahkan pos pengeluaran rutin lainnya (misal: Cicilan HP, Kost, Langganan Streaming, dll).
+                </p>
+              </div>
+              <Button
+                type="button"
+                onClick={handleAddCustomExpense}
+                variant="outline"
+                className="text-xs border-[#e2e8f0] text-black font-semibold hover:bg-slate-50 rounded-lg flex items-center gap-1.5 shrink-0"
+              >
+                <Plus className="h-3.5 w-3.5 text-black" />
+                <span>Tambah Pengeluaran</span>
+              </Button>
+            </div>
+
+            {customExpenses.length === 0 ? (
+              <div className="p-4 rounded-xl border border-dashed border-[#e2e8f0] text-center text-xs text-[#45464d] bg-slate-50/50">
+                Belum ada pengeluaran kustom tambahan. Klik tombol <strong>+ Tambah Pengeluaran</strong> jika Anda memiliki tagihan rutin lainnya.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {customExpenses.map((item, index) => (
+                  <div key={item.id} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 p-3 rounded-xl border border-[#e2e8f0] bg-white shadow-2xs">
+                    <div className="flex-1">
+                      <Label className="text-[11px] font-medium text-slate-500 mb-1 block sm:hidden">Nama Pengeluaran</Label>
+                      <Input
+                        type="text"
+                        placeholder="Nama Pengeluaran (misal: Cicilan Laptop)"
+                        value={item.name}
+                        onChange={(e) => handleCustomExpenseChange(item.id, 'name', e.target.value)}
+                        className="border-[#e2e8f0] rounded-lg text-xs font-medium"
+                      />
+                    </div>
+                    <div className="w-full sm:w-48 relative">
+                      <Label className="text-[11px] font-medium text-slate-500 mb-1 block sm:hidden">Nominal (Rp)</Label>
+                      <span className="absolute left-3 top-2.5 text-xs font-semibold text-slate-400 font-mono">Rp</span>
+                      <Input
+                        type="text"
+                        placeholder="0"
+                        value={item.amount}
+                        onChange={(e) => handleCustomExpenseChange(item.id, 'amount', e.target.value)}
+                        className="pl-8 border-[#e2e8f0] rounded-lg font-mono text-xs"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => handleRemoveCustomExpense(item.id)}
+                      variant="ghost"
+                      size="icon"
+                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg self-end sm:self-center shrink-0 h-9 w-9"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
         </div>
 
         {/* Submit Button */}

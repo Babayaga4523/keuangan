@@ -681,6 +681,12 @@ export async function actionCopyPreviousMonthBudget(data: {
 // ───────────────────────────────────────────────
 // ACTION 20: Simpan Parameter Keuangan Pengguna
 // ───────────────────────────────────────────────
+export interface CustomExpenseItem {
+  id: string;
+  name: string;
+  amount: number;
+}
+
 export interface UserParametersData {
   monthlySalary: number;
   monthlySavingsGoal: number;
@@ -694,6 +700,7 @@ export interface UserParametersData {
     internetBill: number;
     pocketMoney: number;
     otherExpenses: number;
+    customExpenses?: CustomExpenseItem[];
   };
 }
 
