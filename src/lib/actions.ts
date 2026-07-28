@@ -689,6 +689,7 @@ export interface UserParametersData {
   expenses: {
     parentAllowance: number;
     motorService: number;
+    motorFuel: number;
     bpjsHealth: number;
     internetBill: number;
     pocketMoney: number;

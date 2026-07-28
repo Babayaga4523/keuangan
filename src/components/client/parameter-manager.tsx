@@ -11,6 +11,8 @@ import {
   PiggyBank, 
   HeartHandshake, 
   Bike, 
+  Wrench,
+  Fuel,
   ShieldCheck, 
   Wifi, 
   Coffee, 
@@ -60,7 +62,8 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
 
   // Expense breakdowns
   const [parentAllowance, setParentAllowance] = useState(initialParameters?.expenses?.parentAllowance ? initialParameters.expenses.parentAllowance.toString() : '1000000');
-  const [motorService, setMotorService] = useState(initialParameters?.expenses?.motorService ? initialParameters.expenses.motorService.toString() : '300000');
+  const [motorService, setMotorService] = useState(initialParameters?.expenses?.motorService ? initialParameters.expenses.motorService.toString() : '150000');
+  const [motorFuel, setMotorFuel] = useState(initialParameters?.expenses?.motorFuel ? initialParameters.expenses.motorFuel.toString() : '200000');
   const [bpjsHealth, setBpjsHealth] = useState(initialParameters?.expenses?.bpjsHealth ? initialParameters.expenses.bpjsHealth.toString() : '150000');
   const [internetBill, setInternetBill] = useState(initialParameters?.expenses?.internetBill ? initialParameters.expenses.internetBill.toString() : '250000');
   const [pocketMoney, setPocketMoney] = useState(initialParameters?.expenses?.pocketMoney ? initialParameters.expenses.pocketMoney.toString() : '1500000');
@@ -71,12 +74,13 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
   const savingsNum = parseFormattedNumber(savingsGoal);
   const parentNum = parseFormattedNumber(parentAllowance);
   const motorNum = parseFormattedNumber(motorService);
+  const fuelNum = parseFormattedNumber(motorFuel);
   const bpjsNum = parseFormattedNumber(bpjsHealth);
   const internetNum = parseFormattedNumber(internetBill);
   const pocketNum = parseFormattedNumber(pocketMoney);
   const otherNum = parseFormattedNumber(otherExpenses);
 
-  const totalExpensesNum = parentNum + motorNum + bpjsNum + internetNum + pocketNum + otherNum;
+  const totalExpensesNum = parentNum + motorNum + fuelNum + bpjsNum + internetNum + pocketNum + otherNum;
   const netSurplusNum = salaryNum - (totalExpensesNum + savingsNum);
 
   const savingsPct = salaryNum > 0 ? ((savingsNum / salaryNum) * 100).toFixed(1) : '0';
@@ -97,6 +101,7 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
       expenses: {
         parentAllowance: parentNum,
         motorService: motorNum,
+        motorFuel: fuelNum,
         bpjsHealth: bpjsNum,
         internetBill: internetNum,
         pocketMoney: pocketNum,
@@ -313,11 +318,11 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
               </div>
             </div>
 
-            {/* Service & Bensin Motor */}
+            {/* Service Motor */}
             <div className="space-y-2">
               <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                <Bike className="h-4 w-4 text-amber-500" />
-                Service & Bensin Motor
+                <Wrench className="h-4 w-4 text-amber-500" />
+                Service Motor
               </Label>
               <div className="relative">
                 <span className="absolute left-3 top-2.5 text-sm font-semibold text-slate-400 font-mono">Rp</span>
@@ -326,6 +331,24 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
                   placeholder="0"
                   value={motorService}
                   onChange={(e) => setMotorService(e.target.value)}
+                  className="pl-9 border-[#e2e8f0] rounded-lg font-mono text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Bensin Motor */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <Fuel className="h-4 w-4 text-orange-500" />
+                Bensin Motor
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-sm font-semibold text-slate-400 font-mono">Rp</span>
+                <Input
+                  type="text"
+                  placeholder="0"
+                  value={motorFuel}
+                  onChange={(e) => setMotorFuel(e.target.value)}
                   className="pl-9 border-[#e2e8f0] rounded-lg font-mono text-sm"
                 />
               </div>

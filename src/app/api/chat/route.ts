@@ -191,7 +191,8 @@ export async function POST(req: Request) {
 - Rekening Utama Khusus Tabungan: **${savAcc ? `${savAcc.name} (${formatRp(savAcc.balance)})` : 'Belum ditentukan'}**
 - Rincian Pengeluaran Rutin Pengguna:
   * 👨‍👩‍👦 Jatah Orang Tua: **${formatRp(userParams.expenses?.parentAllowance || 0)}**
-  * 🛵 Service & Bensin Motor: **${formatRp(userParams.expenses?.motorService || 0)}**
+  * 🔧 Service Motor: **${formatRp(userParams.expenses?.motorService || 0)}**
+  * ⛽ Bensin Motor: **${formatRp(userParams.expenses?.motorFuel || 0)}**
   * 🏥 BPJS / Kesehatan: **${formatRp(userParams.expenses?.bpjsHealth || 0)}**
   * 🌐 Internet & Tagihan: **${formatRp(userParams.expenses?.internetBill || 0)}**
   * ☕ Uang Jajan / Operasional: **${formatRp(userParams.expenses?.pocketMoney || 0)}**
