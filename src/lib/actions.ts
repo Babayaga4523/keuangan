@@ -731,7 +731,10 @@ export async function actionSaveUserParameters(params: UserParametersData): Prom
       updated_at: new Date().toISOString()
     }, { onConflict: 'profile' });
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    console.error('[actionSaveUserParameters] Supabase upsert error:', JSON.stringify(error));
+    return { success: false, error: error.message };
+  }
 
   revalidateAll();
   return { success: true, data: undefined };
