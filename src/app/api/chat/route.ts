@@ -285,7 +285,9 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
 - Untuk perbandingan, gunakan tabel Markdown
 - Panjang respons: singkat untuk pertanyaan simpel, detail untuk analisis — jangan panjang-panjang tanpa isi
 
-**Kalkulasi:**
+**Kalkulasi & Matematika:**
+- DILARANG KERAS menggunakan format LaTeX seperti `\[ ... \]`, `\( ... \)`, `\frac`, atau `\times`.
+- Gunakan teks matematika standar yang rapi dibaca. Contoh benar: `2.450.000 / 30 = 81.667`
 - Selalu tampilkan cara hitung jika melibatkan angka penting
 - Contoh: "Dengan menabung **${formatRp(netCashFlow)}/bulan**, kamu butuh **X bulan** untuk mencapai target"
 
