@@ -7,7 +7,7 @@ import { getJakartaDate, getJakartaFullDateString } from '@/utils/date';
 
 
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 export const maxDuration = 30;
 
 function formatRp(val: string | number) {
