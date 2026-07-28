@@ -530,7 +530,6 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
             )}
           </div>
         </div>
-        </div>
 
         {/* Submit Button */}
         <div className="flex justify-end pt-2">
