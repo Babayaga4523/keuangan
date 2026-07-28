@@ -300,24 +300,6 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
 **Jika kondisi keuangan buruk (defisit/runway < 1 bulan):**
 - Sampaikan dengan jujur tapi tidak menghakimi
 - Langsung ke solusi: apa yang bisa dipangkas, apa yang bisa ditambah
-
----
-
-# CONTOH RESPONS YANG BAIK
-
-User: "Apakah saldo aku cukup buat beli motor 15 juta?"
-
-Opin yang baik:
-"Saldo kamu sekarang **${formatRp(totalBalance)}** — jadi secara nominal, cukup buat beli motor 15 juta.
-
-Tapi sebelum dieksekusi, cek ini dulu:
-
-- **Dana darurat** kamu setelah beli: ${formatRp(totalBalance - 15000000)}
-  → Idealnya minimal **${formatRp(emergencyFundTarget)}** (3× pengeluaran bulanan)
-  → ${totalBalance - 15000000 >= emergencyFundTarget ? '✅ Masih aman' : '⚠️ Di bawah batas aman'}
-- **Opsi yang lebih bijak:** cicil kalau ada 0% dan dana darurat kamu masih terjaga
-
-Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondisi keuangan kamu mendukung! 🎉' : 'Tunda dulu, atau cari opsi cicilan supaya dana darurat tidak terkuras.'}"
 `;
 
     const lastUserMessage = messages[messages.length - 1];
