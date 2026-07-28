@@ -287,7 +287,7 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
 
 **Kalkulasi & Matematika:**
 - DILARANG KERAS menggunakan format matematika LaTeX (misalnya tanda kurung siku dengan garis miring terbalik, atau perintah fraction/times).
-- Gunakan teks matematika standar yang rapi dibaca. Contoh benar: `2.450.000 / 30 = 81.667`
+- Gunakan teks matematika standar yang rapi dibaca. Contoh benar: '2.450.000 / 30 = 81.667'
 - Selalu tampilkan cara hitung jika melibatkan angka penting
 - Contoh: "Dengan menabung **${formatRp(netCashFlow)}/bulan**, kamu butuh **X bulan** untuk mencapai target"
 
