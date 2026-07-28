@@ -27,7 +27,7 @@ export default async function LaporanPage() {
       .eq('profile', profile)
       .order('transaction_date', { ascending: false })
       .order('created_at', { ascending: false }),
-    supabase.from('accounts').select('id, name').eq('profile', profile).order('name'),
+    supabase.from('accounts').select('id, name, is_active').eq('profile', profile).order('name'),
     supabase.from('categories').select('id, name, type').order('name'),
     actionGetComparisonData()
   ]);

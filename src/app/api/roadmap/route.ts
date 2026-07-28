@@ -51,7 +51,14 @@ export async function GET() {
         targetAmount: 6000000,
         date: '25 Juli 2026',
         description: 'Gaji bulanan pertama masuk sebesar Rp 6.000.000.',
-        isCompleted: transactions.some(t => t.type === 'INCOME' && t.description.toLowerCase().includes('gaji') && t.transaction_date >= '2026-07-20' && t.transaction_date <= '2026-07-31'),
+        isCompleted: transactions.some(t => {
+          if (t.type !== 'INCOME') return false;
+          const desc = (t.description || '').toLowerCase();
+          const matchesKw = ['gaji', 'payroll', 'salary', 'pendapatan', 'inflow', 'kantor'].some(k => desc.includes(k));
+          const matchesAmt = parseFloat(t.amount) >= 4000000;
+          const inDate = t.transaction_date >= '2026-07-01' && t.transaction_date <= '2026-07-31';
+          return inDate && (matchesKw || matchesAmt);
+        }),
         value: 6000000
       },
       {
@@ -60,7 +67,13 @@ export async function GET() {
         targetAmount: 1050000,
         date: '10 Agustus 2026',
         description: 'Pendapatan tambahan dari honor event sebesar Rp 1.050.000.',
-        isCompleted: transactions.some(t => t.type === 'INCOME' && (t.description.toLowerCase().includes('honor') || t.description.toLowerCase().includes('event'))),
+        isCompleted: transactions.some(t => {
+          if (t.type !== 'INCOME') return false;
+          const desc = (t.description || '').toLowerCase();
+          const matchesKw = ['honor', 'event', 'bonus', 'freelance', 'proyek', 'sampingan'].some(k => desc.includes(k));
+          const matchesAmt = parseFloat(t.amount) >= 500000 && parseFloat(t.amount) <= 2500000;
+          return matchesKw || matchesAmt;
+        }),
         value: 1050000
       },
       {
@@ -69,7 +82,14 @@ export async function GET() {
         targetAmount: 6000000,
         date: '25 Agustus 2026',
         description: 'Gaji bulanan kedua masuk sebesar Rp 6.000.000.',
-        isCompleted: transactions.some(t => t.type === 'INCOME' && t.description.toLowerCase().includes('gaji') && t.transaction_date >= '2026-08-20' && t.transaction_date <= '2026-08-31'),
+        isCompleted: transactions.some(t => {
+          if (t.type !== 'INCOME') return false;
+          const desc = (t.description || '').toLowerCase();
+          const matchesKw = ['gaji', 'payroll', 'salary', 'pendapatan', 'inflow', 'kantor'].some(k => desc.includes(k));
+          const matchesAmt = parseFloat(t.amount) >= 4000000;
+          const inDate = t.transaction_date >= '2026-08-01' && t.transaction_date <= '2026-08-31';
+          return inDate && (matchesKw || matchesAmt);
+        }),
         value: 6000000
       },
       {
@@ -78,7 +98,13 @@ export async function GET() {
         targetAmount: 12850000,
         date: '25 Agustus 2026',
         description: 'Pembelian iPhone 15 Pro tunai seharga Rp 12.850.000.',
-        isCompleted: transactions.some(t => t.type === 'EXPENSE' && t.description.toLowerCase().includes('iphone')),
+        isCompleted: transactions.some(t => {
+          if (t.type !== 'EXPENSE') return false;
+          const desc = (t.description || '').toLowerCase();
+          const matchesKw = ['iphone', 'hp', 'gadget', 'handphone', 'ibox', 'apple'].some(k => desc.includes(k));
+          const matchesAmt = parseFloat(t.amount) >= 10000000;
+          return matchesKw || matchesAmt;
+        }),
         value: -12850000
       },
       {
@@ -87,7 +113,14 @@ export async function GET() {
         targetAmount: 6000000,
         date: '25 September 2026',
         description: 'Gaji bulanan ketiga (pemulihan saldo) masuk sebesar Rp 6.000.000.',
-        isCompleted: transactions.some(t => t.type === 'INCOME' && t.description.toLowerCase().includes('gaji') && t.transaction_date >= '2026-09-20'),
+        isCompleted: transactions.some(t => {
+          if (t.type !== 'INCOME') return false;
+          const desc = (t.description || '').toLowerCase();
+          const matchesKw = ['gaji', 'payroll', 'salary', 'pendapatan', 'inflow', 'kantor'].some(k => desc.includes(k));
+          const matchesAmt = parseFloat(t.amount) >= 4000000;
+          const inDate = t.transaction_date >= '2026-09-01';
+          return inDate && (matchesKw || matchesAmt);
+        }),
         value: 6000000
       }
     ];

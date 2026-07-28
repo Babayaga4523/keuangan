@@ -108,8 +108,14 @@ const ReceiptDraftCard = ({
         const data = resultData.accounts || [];
         
         setLocalAccounts(data);
-        // Auto select CASH or first active account
-        const defaultAcc = data.find((a: any) => a.type === 'CASH') || data[0];
+        setLocalAccounts(data);
+        // Smart Account Selection: match accountName from OCR draft if available, else default to CASH or first account
+        let matchedAccount = null;
+        if (draft?.accountName) {
+          const search = draft.accountName.toLowerCase();
+          matchedAccount = data.find((a: any) => a.name.toLowerCase().includes(search) || search.includes(a.name.toLowerCase()));
+        }
+        const defaultAcc = matchedAccount || data.find((a: any) => a.type === 'CASH') || data[0];
         if (defaultAcc) {
           setSelectedAccount(defaultAcc.id);
         }
@@ -177,6 +183,9 @@ const ReceiptDraftCard = ({
   }
 
   const isLowConfidence = draft.confidence === 'low';
+  const categoryOptions = categories && categories.length > 0
+    ? categories.filter((c: any) => c.type === 'EXPENSE').map((c: any) => c.name)
+    : ['Makanan & Minuman', 'Transportasi', 'Belanja Bulanan', 'Kesehatan', 'Hiburan', 'Tagihan & Utilitas', 'Lainnya'];
 
   return (
     <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs text-xs space-y-3.5 min-w-[300px] sm:min-w-[340px] max-w-sm w-full mt-2 text-slate-800">
@@ -227,7 +236,7 @@ const ReceiptDraftCard = ({
               onChange={e => setCategory(e.target.value)}
               className="w-full px-2 py-1 border border-slate-200 rounded-lg focus:outline-none focus:border-black text-black bg-slate-50"
             >
-              {['Makanan', 'Transportasi', 'Hiburan', 'Tagihan', 'Belanja', 'Lainnya'].map(cat => (
+              {categoryOptions.map((cat: string) => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
@@ -447,11 +456,11 @@ export default function AiChatInterface() {
       // Find category ID that matches category name
       let categoryId = '';
       if (categories.length > 0) {
-        const catNameLower = draftData.category.toLowerCase();
+        const catNameLower = (draftData.category || '').toLowerCase();
         const matchedCat = categories.find((c: any) => 
           c.type === 'EXPENSE' && 
           (c.name.toLowerCase().includes(catNameLower) || catNameLower.includes(c.name.toLowerCase()))
-        );
+        ) || categories.find((c: any) => c.type === 'EXPENSE');
         if (matchedCat) categoryId = matchedCat.id;
       }
 
@@ -703,12 +712,13 @@ export default function AiChatInterface() {
     if (!input.trim() && attachments.length === 0) return;
     
     if (attachments.length > 0 && !input.trim()) {
-      setInput("Tolong periksa dan analisis struk belanja ini.");
-      setTimeout(() => {
-        handleSubmit(e, {
-          experimental_attachments: attachments as any
-        });
-      }, 30);
+      // Use append directly when there's no input text to avoid state sync issues
+      append({
+        role: 'user',
+        content: 'Tolong periksa dan analisis struk belanja ini.',
+        experimental_attachments: attachments as any
+      });
+      setInput('');
     } else {
       handleSubmit(e, {
         experimental_attachments: attachments.length > 0 ? (attachments as any) : undefined

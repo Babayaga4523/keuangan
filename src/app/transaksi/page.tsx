@@ -30,7 +30,7 @@ export default async function TransaksiPage() {
       .eq('profile', profile)
       .order('transaction_date', { ascending: false })
       .order('created_at', { ascending: false }),
-    supabase.from('accounts').select('*').eq('profile', profile).order('name'),
+    supabase.from('accounts').select('*').eq('profile', profile).eq('is_active', true).order('name'),
     supabase.from('categories').select('*').order('name')
   ]);
 

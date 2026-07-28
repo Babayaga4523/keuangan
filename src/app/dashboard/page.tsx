@@ -29,6 +29,7 @@ import RoadmapTimelineWidget from '@/components/client/roadmap-timeline-widget';
 import InsightsWidget from '@/components/client/insights-widget';
 import BalanceEditor from '@/components/client/balance-editor';
 import AccountTableActions from '@/components/client/account-table-actions';
+import DeleteAccountDialog from '@/components/client/delete-account-dialog';
 
 export const revalidate = 0; // Live data
 
@@ -42,6 +43,7 @@ export default async function DashboardPage() {
     .from('accounts')
     .select('*')
     .eq('profile', profile)
+    .eq('is_active', true)
     .order('balance', { ascending: false });
 
   const accounts = accountsRaw || [];
@@ -222,9 +224,9 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Top Header/Navbar */}
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-[#e2e8f0] pb-5 gap-4">
-        <div className="flex items-center flex-grow">
-          <h1 className="text-xl font-bold tracking-tight text-black md:text-2xl">Financial Command Center</h1>
+      <header className="flex items-center justify-between border-b border-[#e2e8f0] pb-4 sm:pb-5 gap-2 sm:gap-4">
+        <div className="flex items-center flex-grow min-w-0">
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-black truncate">Financial Command Center</h1>
           <div className="ml-8 relative w-full max-w-xs hidden md:block">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#45464d] h-4 w-4" />
             <input 
@@ -234,14 +236,14 @@ export default async function DashboardPage() {
             />
           </div>
         </div>
-        <div className="flex items-center space-x-4">
-          <button className="p-2 rounded-full hover:bg-[#eceef0] relative shrink-0">
-            <Bell className="h-5 w-5 text-black" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#ba1a1a] rounded-full"></span>
+        <div className="flex items-center space-x-2 sm:space-x-4 shrink-0">
+          <button className="p-1.5 sm:p-2 rounded-full hover:bg-[#eceef0] relative shrink-0">
+            <Bell className="h-4 sm:h-5 w-4 sm:w-5 text-black" />
+            <span className="absolute top-1 right-1 w-2 h-2 bg-[#ba1a1a] rounded-full"></span>
           </button>
-          <div className="h-6 w-[1px] bg-[#c6c6cd]"></div>
-          <div className="flex items-center space-x-2 shrink-0">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#45464d]">Live Sync</span>
+          <div className="h-5 sm:h-6 w-[1px] bg-[#c6c6cd]"></div>
+          <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
+            <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-[#45464d]">Live Sync</span>
             <div className="w-2 h-2 bg-[#009668] rounded-full animate-pulse"></div>
           </div>
         </div>
@@ -318,11 +320,11 @@ export default async function DashboardPage() {
       {/* Net Worth & Smart Allocation Grid */}
       <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
         {/* Net Worth Card (Spans 2 columns) */}
-        <div className="md:col-span-2 bg-white border border-[#e2e8f0] rounded-xl p-6 flex flex-col justify-between hover:shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-shadow duration-200">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="md:col-span-2 bg-white border border-[#e2e8f0] rounded-xl p-4 sm:p-6 flex flex-col justify-between hover:shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-shadow duration-200">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
             <div>
               <p className="text-[10px] font-bold text-[#45464d] uppercase tracking-wider mb-1">TOTAL NET WORTH</p>
-              <h2 className="text-3xl font-bold tracking-tight font-mono text-black">
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight font-mono text-black truncate max-w-full">
                 {formatRupiah(totalBalance)}
               </h2>
               <div className="flex items-center mt-1.5 space-x-1.5">
@@ -333,15 +335,15 @@ export default async function DashboardPage() {
                 <span className="text-[10px] text-[#45464d]">30 hari terakhir</span>
               </div>
             </div>
-            <div className="flex items-center space-x-2 w-full sm:w-auto justify-start sm:justify-end">
+            <div className="grid grid-cols-3 gap-1.5 sm:flex sm:items-center sm:space-x-2 w-full sm:w-auto">
               <AddAccountDialog />
-              <Link href="/laporan" className="flex-grow sm:flex-grow-0">
-                <Button variant="outline" size="sm" className="h-8 w-full border-[#c6c6cd] text-xs px-3 rounded-lg">
+              <Link href="/laporan" className="w-full sm:w-auto">
+                <Button variant="outline" size="sm" className="h-8 w-full border-[#c6c6cd] text-[11px] sm:text-xs px-2 sm:px-3 rounded-lg truncate">
                   Laporan
                 </Button>
               </Link>
-              <Link href="/transaksi" className="flex-1 sm:flex-initial">
-                <Button size="sm" className="h-8 w-full bg-black hover:bg-black/90 text-white text-xs px-3 rounded-lg font-bold">
+              <Link href="/transaksi" className="w-full sm:w-auto">
+                <Button size="sm" className="h-8 w-full bg-black hover:bg-black/90 text-white text-[11px] sm:text-xs px-2 sm:px-3 rounded-lg font-bold truncate">
                   Catat Kas
                 </Button>
               </Link>
@@ -353,7 +355,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Smart Allocation Donut Card (Spans 1 column) */}
-        <div className="bg-white border border-[#e2e8f0] rounded-xl p-6 flex flex-col justify-between hover:shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-shadow duration-200">
+        <div className="bg-white border border-[#e2e8f0] rounded-xl p-4 sm:p-6 flex flex-col justify-between hover:shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-shadow duration-200">
           <div className="flex justify-between items-center mb-4">
             <p className="text-[10px] font-bold text-[#45464d] uppercase tracking-wider">SMART ALLOCATION</p>
             <MoreHorizontal className="h-5 w-5 text-[#45464d]" />
@@ -367,14 +369,14 @@ export default async function DashboardPage() {
       {/* Forecast & Sinking Funds Actions Grid */}
       <div className="grid gap-6 grid-cols-1 md:grid-cols-12">
         {/* Weekly Cash Flow Forecast Card */}
-        <div className="md:col-span-7 bg-white border border-[#e2e8f0] rounded-xl p-6 flex flex-col justify-between hover:shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-shadow duration-200">
-          <div className="flex justify-between items-center mb-6">
+        <div className="md:col-span-7 bg-white border border-[#e2e8f0] rounded-xl p-4 sm:p-6 flex flex-col justify-between hover:shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-shadow duration-200">
+          <div className="flex justify-between items-center mb-4 sm:mb-6">
             <div>
               <p className="text-[10px] font-bold text-[#45464d] uppercase tracking-wider">LIQUIDITY FORECAST</p>
               <p className="text-xs text-[#45464d] font-medium">Estimasi Arus Kas Masuk Mingguan</p>
             </div>
-            <div className="flex items-center space-x-1.5 bg-[#eceef0] px-2.5 py-1 rounded-lg text-black">
-              <Calendar className="h-3.5 w-3.5 text-black" />
+            <div className="flex items-center space-x-1.5 bg-[#eceef0] px-2 sm:px-2.5 py-1 rounded-lg text-black">
+              <Calendar className="h-3.5 w-3.5 text-black shrink-0" />
               <span className="text-[10px] font-bold">
                 {now.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' })}
               </span>
@@ -385,26 +387,26 @@ export default async function DashboardPage() {
           <ForecastChart data={weeklyFlow} />
 
           {/* Statistics summary below bars */}
-          <div className="mt-6 pt-6 border-t border-[#e2e8f0] flex justify-around text-center text-xs">
+          <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-[#e2e8f0] grid grid-cols-3 gap-1 text-center text-xs">
             <div>
-              <p className="text-[10px] text-[#45464d] font-medium">Pemasukan</p>
-              <p className="font-bold text-black font-mono">{formatRupiah(totalIncome)}</p>
+              <p className="text-[9px] sm:text-[10px] text-[#45464d] font-medium">Pemasukan</p>
+              <p className="font-bold text-black font-mono text-[10px] sm:text-xs truncate">{formatRupiah(totalIncome)}</p>
             </div>
             <div className="text-center">
-              <p className="text-[10px] text-[#45464d] font-medium">Pengeluaran</p>
-              <p className="font-bold text-[#ba1a1a] font-mono">{formatRupiah(totalExpense)}</p>
+              <p className="text-[9px] sm:text-[10px] text-[#45464d] font-medium">Pengeluaran</p>
+              <p className="font-bold text-[#ba1a1a] font-mono text-[10px] sm:text-xs truncate">{formatRupiah(totalExpense)}</p>
             </div>
             <div className="text-center">
-              <p className="text-[10px] text-[#45464d] font-medium">Surplus Bersih</p>
-              <p className="font-bold text-[#009668] font-mono">{formatRupiah(totalIncome - totalExpense)}</p>
+              <p className="text-[9px] sm:text-[10px] text-[#45464d] font-medium">Surplus Bersih</p>
+              <p className="font-bold text-[#009668] font-mono text-[10px] sm:text-xs truncate">{formatRupiah(totalIncome - totalExpense)}</p>
             </div>
           </div>
         </div>
 
         {/* High Priority Actions Card */}
-        <div className="md:col-span-5 bg-white border border-[#e2e8f0] rounded-xl p-6 flex flex-col justify-between hover:shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-shadow duration-200">
+        <div className="md:col-span-5 bg-white border border-[#e2e8f0] rounded-xl p-4 sm:p-6 flex flex-col justify-between hover:shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-shadow duration-200">
           <div>
-            <div className="flex items-center space-x-2 mb-5">
+            <div className="flex items-center space-x-2 mb-4 sm:mb-5">
               <Zap className="h-4 w-4 text-black fill-black" />
               <p className="text-[10px] font-bold text-[#45464d] uppercase tracking-wider">HIGH-PRIORITY ACTIONS</p>
             </div>
@@ -471,7 +473,7 @@ export default async function DashboardPage() {
 
       {/* Asset Detail Section (Wide Table) */}
       <div className="bg-white border border-[#e2e8f0] rounded-xl overflow-hidden shadow-sm">
-        <div className="px-6 py-4 flex justify-between items-center border-b border-[#e2e8f0] bg-slate-50/10">
+        <div className="px-4 sm:px-6 py-4 flex justify-between items-center border-b border-[#e2e8f0] bg-slate-50/10">
           <h3 className="text-sm font-bold text-black">Informasi Saldo Rekening</h3>
           <div className="flex space-x-1.5">
             <AccountTableActions accounts={accounts} />
@@ -481,11 +483,11 @@ export default async function DashboardPage() {
           <table className="w-full text-left text-xs">
             <thead className="bg-[#f2f4f6] border-b border-[#e2e8f0] text-[#45464d] font-bold uppercase tracking-wider">
               <tr>
-                <th className="px-6 py-3.5 font-bold">Jenis Rekening</th>
+                <th className="px-3 sm:px-6 py-3.5 font-bold">Jenis Rekening</th>
                 <th className="px-6 py-3.5 font-bold hidden md:table-cell">Keterangan</th>
-                <th className="px-6 py-3.5 font-bold text-right">Saldo</th>
+                <th className="px-3 sm:px-6 py-3.5 font-bold text-right">Saldo</th>
                 <th className="px-6 py-3.5 font-bold text-right hidden sm:table-cell">Persentase</th>
-                <th className="px-6 py-3.5 font-bold hidden sm:table-cell">Status</th>
+                <th className="px-3 sm:px-6 py-3.5 font-bold text-center sm:text-left">Aksi / Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e2e8f0]">
@@ -495,18 +497,18 @@ export default async function DashboardPage() {
                 
                 return (
                   <tr key={acc.id} className="hover:bg-[#f2f4f6]/40 transition-colors cursor-pointer group">
-                    <td className="px-6 py-4">
+                    <td className="px-3 sm:px-6 py-3.5">
                       <div className="flex items-center space-x-2">
-                        <Wallet className="h-4 w-4 text-black" />
-                        <span className="font-bold text-black">{acc.name}</span>
+                        <Wallet className="h-4 w-4 text-black shrink-0" />
+                        <span className="font-bold text-black text-xs truncate max-w-[110px] sm:max-w-none">{acc.name}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-slate-500 font-medium hidden md:table-cell">
                       Limit Alert: {formatRupiah(parseFloat(acc.low_balance_threshold || '0'))}
                     </td>
-                    <td className="px-6 py-4 font-bold text-right font-mono text-black">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <span>{formatRupiah(balanceVal)}</span>
+                    <td className="px-3 sm:px-6 py-3.5 font-bold text-right font-mono text-black">
+                      <div className="flex items-center justify-end gap-1">
+                        <span className="text-xs">{formatRupiah(balanceVal)}</span>
                         <BalanceEditor 
                           accountId={acc.id} 
                           accountName={acc.name} 
@@ -515,15 +517,19 @@ export default async function DashboardPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right font-bold font-mono text-[#45464d] hidden sm:table-cell">{pct}%</td>
-                    <td className="px-6 py-4 hidden sm:table-cell">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-0.5 rounded-full bg-[#d0e1fb] text-[#38485d] text-[10px] font-bold">
+                    <td className="px-3 sm:px-6 py-3.5">
+                      <div className="flex items-center justify-center sm:justify-start gap-1.5">
+                        <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full bg-[#d0e1fb] text-[#38485d] text-[10px] font-bold">
                           Aktif
                         </span>
                         <ThresholdSetter 
                           accountId={acc.id} 
                           accountName={acc.name} 
                           currentThreshold={parseFloat(acc.low_balance_threshold || '0')} 
+                        />
+                        <DeleteAccountDialog
+                          accountId={acc.id}
+                          accountName={acc.name}
                         />
                       </div>
                     </td>
@@ -535,8 +541,8 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* FAB float button for quick transactions */}
-      <div className="fixed bottom-6 right-6 z-50">
+      {/* FAB float button for quick transactions (Hidden on mobile) */}
+      <div className="fixed bottom-6 right-6 z-50 hidden sm:block">
         <Link href="/transaksi">
           <button className="w-12 h-12 bg-black text-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200 group">
             <Plus className="h-6 w-6" />

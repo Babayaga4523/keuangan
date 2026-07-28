@@ -148,6 +148,20 @@ export async function actionFundSavingGoal(data: {
 
   if (error) return { success: false, error: error.message };
 
+  // Update status is_completed jika target sudah 100% tercapai
+  const { data: goal } = await supabase
+    .from('saving_goals')
+    .select('current_amount, target_amount')
+    .eq('id', goalId)
+    .single();
+
+  if (goal && parseFloat(String(goal.current_amount)) >= parseFloat(String(goal.target_amount))) {
+    await supabase
+      .from('saving_goals')
+      .update({ is_completed: true })
+      .eq('id', goalId);
+  }
+
   revalidateAll();
   return { success: true, data: undefined };
 }
@@ -591,4 +605,125 @@ export async function actionImportCSV(transactionsList: {
   return { success: true, data: undefined };
 }
 
+// ───────────────────────────────────────────────
+// ACTION 18: Hapus Rekening (Soft Delete)
+// ───────────────────────────────────────────────
+export async function actionDeleteAccount(accountId: string): Promise<ActionResult> {
+  const supabase = createServerClient();
+  const cookieStore = await cookies();
+  const profile = cookieStore.get('current_profile')?.value || 'silva';
+
+  const { error } = await supabase
+    .from('accounts')
+    .update({ is_active: false })
+    .eq('id', accountId)
+    .eq('profile', profile);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidateAll();
+  return { success: true, data: undefined };
+}
+
+// ───────────────────────────────────────────────
+// ACTION 19: Salin Anggaran dari Bulan Sebelumnya
+// ───────────────────────────────────────────────
+export async function actionCopyPreviousMonthBudget(data: {
+  currentMonth: number;
+  currentYear: number;
+}): Promise<ActionResult<{ copiedCount: number }>> {
+  const supabase = createServerClient();
+  const cookieStore = await cookies();
+  const profile = cookieStore.get('current_profile')?.value || 'silva';
+
+  const { currentMonth, currentYear } = data;
+  let prevMonth = currentMonth - 1;
+  let prevYear = currentYear;
+  if (prevMonth === 0) {
+    prevMonth = 12;
+    prevYear = currentYear - 1;
+  }
+
+  // Fetch previous month budgets
+  const { data: prevBudgets, error: fetchErr } = await supabase
+    .from('budgets')
+    .select('category_id, amount')
+    .eq('profile', profile)
+    .eq('month', prevMonth)
+    .eq('year', prevYear);
+
+  if (fetchErr) return { success: false, error: fetchErr.message };
+
+  if (!prevBudgets || prevBudgets.length === 0) {
+    return { success: false, error: 'Tidak ditemukan anggaran pada bulan sebelumnya untuk disalin.' };
+  }
+
+  const upsertRows = prevBudgets.map(b => ({
+    profile,
+    category_id: b.category_id,
+    amount: b.amount,
+    month: currentMonth,
+    year: currentYear
+  }));
+
+  const { error: upsertErr } = await supabase
+    .from('budgets')
+    .upsert(upsertRows, { onConflict: 'profile,category_id,month,year' });
+
+  if (upsertErr) return { success: false, error: upsertErr.message };
+
+  revalidateAll();
+  return { success: true, data: { copiedCount: upsertRows.length } };
+}
+
+// ───────────────────────────────────────────────
+// ACTION 20: Simpan Parameter Keuangan Pengguna
+// ───────────────────────────────────────────────
+export interface UserParametersData {
+  monthlySalary: number;
+  monthlySavingsGoal: number;
+  operatingAccountId?: string;
+  savingsAccountId?: string;
+  expenses: {
+    parentAllowance: number;
+    motorService: number;
+    bpjsHealth: number;
+    internetBill: number;
+    pocketMoney: number;
+    otherExpenses: number;
+  };
+}
+
+export async function actionSaveUserParameters(params: UserParametersData): Promise<ActionResult> {
+  const supabase = createServerClient();
+  const cookieStore = await cookies();
+  const profile = cookieStore.get('current_profile')?.value || 'silva';
+
+  // Get current simulator config state if exists
+  const { data: existing } = await supabase
+    .from('simulator_configs')
+    .select('state')
+    .eq('profile', profile)
+    .maybeSingle();
+
+  const currentState = existing?.state || {};
+  const newState = {
+    ...currentState,
+    userParameters: params,
+    updatedAt: new Date().toISOString()
+  };
+
+  const { error } = await supabase
+    .from('simulator_configs')
+    .upsert({
+      profile,
+      state: newState,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'profile' });
+
+  if (error) return { success: false, error: error.message };
+
+  revalidateAll();
+  return { success: true, data: undefined };
+}
 

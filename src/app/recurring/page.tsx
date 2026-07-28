@@ -16,7 +16,7 @@ export default async function RecurringPage() {
       .eq('profile', profile)
       .eq('is_active', true)
       .order('next_due', { ascending: true }),
-    supabase.from('accounts').select('id, name, balance').eq('profile', profile).order('name'),
+    supabase.from('accounts').select('id, name, balance').eq('profile', profile).eq('is_active', true).order('name'),
     supabase.from('categories').select('id, name, type').order('name'),
   ]);
 

@@ -151,11 +151,11 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
           <span>Catat Transaksi</span>
         </button>
       } />
-      <DialogContent className="sm:max-w-[425px] border border-[#e2e8f0] bg-white rounded-xl shadow-lg">
+      <DialogContent className="w-[95vw] sm:max-w-[425px] max-h-[90vh] overflow-y-auto border border-[#e2e8f0] bg-white rounded-xl shadow-lg p-4 sm:p-6">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-slate-800 text-lg font-bold">Catat Transaksi Baru</DialogTitle>
-            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full tracking-wider uppercase ${
+            <DialogTitle className="text-slate-800 text-base sm:text-lg font-bold">Catat Transaksi Baru</DialogTitle>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wider uppercase ${
               profile === 'yoga' 
                 ? 'bg-blue-50 text-blue-600 border border-blue-200' 
                 : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
@@ -163,11 +163,11 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
               {profile === 'yoga' ? '🧘 Yoga' : '🌿 Silva'}
             </span>
           </div>
-          <DialogDescription className="text-slate-400 text-xs">
+          <DialogDescription className="text-slate-400 text-xs mt-1">
             Transaksi akan dicatat ke profil <strong>{profile === 'yoga' ? 'Yoga' : 'Silva'}</strong>. Pastikan rekening yang dipilih sudah benar.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+        <form onSubmit={handleSubmit} className="space-y-3.5 py-2">
           {/* Error Message */}
           {errorMsg && (
             <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-start gap-2">
@@ -177,7 +177,7 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
           )}
 
           {/* Tipe Transaksi */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-slate-500">Tipe Transaksi</Label>
             <div className="grid grid-cols-3 gap-2">
               {(['EXPENSE', 'INCOME', 'TRANSFER'] as const).map((t) => (
@@ -191,13 +191,13 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
                     setErrorMsg(null);
                   }}
                   className={`
-                    py-2 text-xs font-semibold rounded-lg border transition-all duration-200
+                    py-2 text-xs font-semibold rounded-lg border transition-all duration-200 active:scale-95
                     ${type === t 
                       ? t === 'INCOME' 
-                        ? 'bg-emerald-50 border-emerald-500 text-emerald-600' 
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-600 font-bold' 
                         : t === 'EXPENSE'
-                        ? 'bg-red-50 border-red-500 text-red-600'
-                        : 'bg-blue-50 border-blue-500 text-blue-600'
+                        ? 'bg-red-50 border-red-500 text-red-600 font-bold'
+                        : 'bg-blue-50 border-blue-500 text-blue-600 font-bold'
                       : 'border-[#e2e8f0] text-slate-500 hover:bg-slate-50'
                     }
                   `}
@@ -209,19 +209,19 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
           </div>
 
           {/* Rekening Asal */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="accountId" className="text-xs font-semibold text-slate-500">
               {type === 'TRANSFER' ? 'Dari Rekening' : 'Pilih Rekening'}
             </Label>
             <Select value={accountId} onValueChange={(val) => setAccountId(val || '')}>
-              <SelectTrigger id="accountId" className="border-[#e2e8f0] rounded-lg">
+              <SelectTrigger id="accountId" className="border-[#e2e8f0] rounded-lg h-10 sm:h-9 text-sm sm:text-xs">
                 <SelectValue placeholder="Pilih rekening...">
                   {accounts.find((acc) => acc.id === accountId)?.name}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-white border border-[#e2e8f0]">
                 {accounts.map((acc) => (
-                  <SelectItem key={acc.id} value={acc.id} className="hover:bg-slate-50">
+                  <SelectItem key={acc.id} value={acc.id} className="hover:bg-slate-50 text-sm sm:text-xs">
                     {acc.name}
                   </SelectItem>
                 ))}
@@ -231,10 +231,10 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
 
           {/* Rekening Tujuan (Hanya untuk TRANSFER) */}
           {type === 'TRANSFER' && (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="destinationAccountId" className="text-xs font-semibold text-slate-500">Ke Rekening</Label>
               <Select value={destinationAccountId} onValueChange={(val) => setDestinationAccountId(val || '')}>
-                <SelectTrigger id="destinationAccountId" className="border-[#e2e8f0] rounded-lg">
+                <SelectTrigger id="destinationAccountId" className="border-[#e2e8f0] rounded-lg h-10 sm:h-9 text-sm sm:text-xs">
                   <SelectValue placeholder="Pilih rekening tujuan...">
                     {accounts.find((acc) => acc.id === destinationAccountId)?.name}
                   </SelectValue>
@@ -243,7 +243,7 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
                   {accounts
                     .filter((acc) => acc.id !== accountId)
                     .map((acc) => (
-                      <SelectItem key={acc.id} value={acc.id} className="hover:bg-slate-50">
+                      <SelectItem key={acc.id} value={acc.id} className="hover:bg-slate-50 text-sm sm:text-xs">
                         {acc.name}
                       </SelectItem>
                     ))}
@@ -254,17 +254,17 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
 
           {/* Kategori (Hanya untuk INCOME/EXPENSE) */}
           {type !== 'TRANSFER' && (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="categoryId" className="text-xs font-semibold text-slate-500">Kategori</Label>
               <Select value={categoryId} onValueChange={(val) => setCategoryId(val || '')}>
-                <SelectTrigger id="categoryId" className="border-[#e2e8f0] rounded-lg">
+                <SelectTrigger id="categoryId" className="border-[#e2e8f0] rounded-lg h-10 sm:h-9 text-sm sm:text-xs">
                   <SelectValue placeholder="Pilih kategori...">
                     {categories.find((cat) => cat.id === categoryId)?.name}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="bg-white border border-[#e2e8f0]">
                   {filteredCategories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id} className="hover:bg-slate-50">
+                    <SelectItem key={cat.id} value={cat.id} className="hover:bg-slate-50 text-sm sm:text-xs">
                       {cat.name}
                     </SelectItem>
                   ))}
@@ -274,7 +274,7 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
           )}
 
           {/* Jumlah Transaksi */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="amount" className="text-xs font-semibold text-slate-500">Jumlah (Rupiah)</Label>
             <div className="relative">
               <span className="absolute left-3 top-2.5 text-sm font-semibold text-slate-400 font-mono">Rp</span>
@@ -284,27 +284,27 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
                 placeholder="0"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="pl-9 border-[#e2e8f0] rounded-lg font-mono font-semibold"
+                className="pl-9 border-[#e2e8f0] rounded-lg font-mono font-semibold h-10 sm:h-9 text-sm sm:text-xs"
                 required
               />
             </div>
           </div>
 
           {/* Tanggal Transaksi */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="date" className="text-xs font-semibold text-slate-500">Tanggal</Label>
             <Input
               id="date"
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="border-[#e2e8f0] rounded-lg font-mono"
+              className="border-[#e2e8f0] rounded-lg font-mono h-10 sm:h-9 text-sm sm:text-xs"
               required
             />
           </div>
 
           {/* Deskripsi */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="description" className="text-xs font-semibold text-slate-500">Deskripsi / Catatan</Label>
             <Input
               id="description"
@@ -312,13 +312,13 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
               placeholder="Contoh: Beli makan siang"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="border-[#e2e8f0] rounded-lg"
+              className="border-[#e2e8f0] rounded-lg h-10 sm:h-9 text-sm sm:text-xs"
             />
           </div>
 
           {/* Tags (Hanya untuk INCOME/EXPENSE) */}
           {type !== 'TRANSFER' && (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="tags" className="text-xs font-semibold text-slate-500">Tag (Pemisah Koma)</Label>
               <Input
                 id="tags"
@@ -326,14 +326,14 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
                 placeholder="Contoh: makan, liburan, kerja"
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
-                className="border-[#e2e8f0] rounded-lg"
+                className="border-[#e2e8f0] rounded-lg h-10 sm:h-9 text-sm sm:text-xs"
               />
             </div>
           )}
 
           {/* Upload Struk (Hanya untuk INCOME/EXPENSE) */}
           {type !== 'TRANSFER' && (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label className="text-xs font-semibold text-slate-500">Lampirkan Foto Struk</Label>
               <div className="flex flex-col gap-2">
                 <Input
@@ -349,7 +349,7 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
                       reader.readAsDataURL(file);
                     }
                   }}
-                  className="border-[#e2e8f0] rounded-lg text-xs"
+                  className="border-[#e2e8f0] rounded-lg text-xs cursor-pointer"
                 />
                 {receiptUrl && (
                   <div className="relative w-20 h-20 border border-slate-200 rounded overflow-hidden">
@@ -360,20 +360,20 @@ export default function TransactionForm({ accounts, categories, profile = 'silva
             </div>
           )}
 
-          {/* Submit Buttons */}
-          <div className="flex justify-end space-x-2 pt-4">
+          {/* Submit Buttons (Sticky at bottom on small screens) */}
+          <div className="sticky bottom-0 bg-white pt-3 pb-1 border-t border-slate-100 flex justify-end space-x-2 z-10">
             <Button
               type="button"
               variant="outline"
               onClick={() => { setOpen(false); resetForm(); }}
-              className="border-[#e2e8f0] rounded-lg"
+              className="border-[#e2e8f0] rounded-lg text-xs h-9"
             >
               Batal
             </Button>
             <Button
               type="submit"
               disabled={loading}
-              className="bg-black hover:bg-black/90 text-white rounded-lg text-xs font-bold"
+              className="bg-black hover:bg-black/90 text-white rounded-lg text-xs font-bold h-9"
             >
               {loading ? (
                 <>

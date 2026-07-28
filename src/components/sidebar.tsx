@@ -13,7 +13,8 @@ import {
   Settings, 
   Landmark,
   Sparkles,
-  Bot
+  Bot,
+  SlidersHorizontal
 } from 'lucide-react';
 import { Button } from './ui/button';
 
@@ -23,6 +24,7 @@ const navItems = [
   { name: 'Budget Bulanan', href: '/budget', icon: BarChart3 },
   { name: 'Transaksi Berulang', href: '/recurring', icon: Target },
   { name: 'Target Tabungan', href: '/tabungan', icon: Target },
+  { name: 'Parameter Keuangan', href: '/parameter', icon: SlidersHorizontal },
   { name: 'Laporan', href: '/laporan', icon: BarChart3 },
   { name: 'Simulator Roadmap', href: '/simulator', icon: Sparkles },
   { name: 'AI Advisor', href: '/ai-advisor', icon: Bot },

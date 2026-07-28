@@ -21,24 +21,35 @@ export async function POST(req: Request) {
 
     if (type === 'simulator') {
       const body = await req.json();
-      const { dreamName, dreamCost, targetMonthOffset, incomes, expenses, oneOffs, startBalance, timeline } = body;
-      
-      const prompt = `
-Anda adalah Opin, AI Financial Advisor yang jujur dan logis. Berikan 1-2 kalimat evaluasi analisis tentang kelayakan rencana simulasi belanja aset berikut:
-- Saldo Awal Tabungan: Rp ${startBalance.toLocaleString('id-ID')}
-- Barang yang Mau Dibeli: "${dreamName || 'Aset Impian'}" seharga Rp ${dreamCost.toLocaleString('id-ID')}
-- Target Waktu Pembelian: ${targetMonthOffset} bulan lagi dari sekarang.
-- Arus Kas Masuk Bulanan: Rp ${incomes.reduce((s:any, i:any) => s + i.amount, 0).toLocaleString('id-ID')}/bulan
-- Arus Kas Keluar Bulanan (Biaya Hidup): Rp ${expenses.reduce((s:any, e:any) => s + e.amount, 0).toLocaleString('id-ID')}/bulan
-- Pengeluaran Sekali Bayar Awal (One-off): ${oneOffs.map((o:any) => `${o.name} Rp ${o.amount.toLocaleString('id-ID')}`).join(', ') || 'Tidak ada'}
-- Hasil Proyeksi Tiap Bulan:
-${timeline.map((t:any) => `- Sisa Saldo Akhir Bulan ${t.monthName} Rp ${t.balanceAfterPurchase.toLocaleString('id-ID')} (${t.statusText})`).join('\n')}
+      const { dreamName, dreamCost, targetMonthOffset, startMonth, startYear, targetMonth, targetYear, incomes, expenses, oneOffs, startBalance, timeline } = body;
 
-Tugas: Analisis apakah rencana ini "Aman", "Mepet (Kritis)", atau "Berbahaya (Minus)". Berikan saran taktis perbaikan (misal: "Disarankan mengurangi biaya hidup bulanan sebesar Rp X atau menunda target 1 bulan agar sisa saldo aman"). Langsung berikan kalimat evaluasi tersebut tanpa basa-basi pembuka seperti "Tentu" atau "Berdasarkan analisis".
+      // Fetch saved userParameters for full context
+      const { data: configRes } = await supabase
+        .from('simulator_configs')
+        .select('state')
+        .eq('profile', profile)
+        .maybeSingle();
+
+      const userParams = configRes?.state?.userParameters || null;
+
+      const prompt = `
+Anda adalah Opin, AI Financial Advisor yang cerdik, logis, dan analitis tinggi. Berikan 2 kalimat rekomendasi dan analisis terbaik tentang kelayakan rencana simulasi belanja aset berikut:
+- Profil Pengguna: ${profile.toUpperCase()}
+- Saldo Awal Simulasi: Rp ${startBalance.toLocaleString('id-ID')}
+- Barang yang Mau Dibeli: "${dreamName || 'Aset Impian'}" seharga Rp ${dreamCost.toLocaleString('id-ID')}
+- Target Eksekusi Pembelian: Bulan ${targetMonth !== undefined ? targetMonth + 1 : ''} ${targetYear || ''}
+${userParams ? `- Parameter Pengguna: Gaji Rp ${userParams.monthlySalary?.toLocaleString('id-ID')}, Target Nabung Rp ${userParams.monthlySavingsGoal?.toLocaleString('id-ID')}, Uang Jajan Rp ${userParams.expenses?.pocketMoney?.toLocaleString('id-ID')}, Jatah Orangtua Rp ${userParams.expenses?.parentAllowance?.toLocaleString('id-ID')}` : ''}
+- Arus Kas Masuk Bulanan: Rp ${incomes.reduce((s:any, i:any) => s + i.amount, 0).toLocaleString('id-ID')}/bulan
+- Arus Kas Keluar Bulanan: Rp ${expenses.reduce((s:any, e:any) => s + e.amount, 0).toLocaleString('id-ID')}/bulan
+- Pengeluaran Sekali Bayar Awal (One-off): ${oneOffs.map((o:any) => `${o.name} Rp ${o.amount.toLocaleString('id-ID')}`).join(', ') || 'Tidak ada'}
+- Ringkasan Proyeksi Kas Akhir Bulan:
+${timeline.map((t:any) => `- ${t.monthName}: Sisa Saldo Akhir Rp ${(t.finalBalance ?? t.balanceAfterPurchase ?? 0).toLocaleString('id-ID')} (${t.statusText})`).join('\n')}
+
+Tugas: Berikan analisis cerdas apakah rencana ini "Aman", "Mepet (Kritis)", atau "Defisit (Minus)". Sebutkan kalkulasi konkret berapa nominal penghematan atau dana darurat yang harus dijaga agar sisa saldo pasca pembelian tetap aman. Langsung berikan kalimat saran taktis tersebut tanpa kata pembuka.
 `;
 
       const { text } = await generateText({
-        model: githubOpenAI('gpt-4.1-mini'),
+        model: githubOpenAI('gpt-4o-mini'),
         prompt,
         temperature: 0.3
       });
@@ -86,7 +97,7 @@ Tugas: Berikan 1-2 kalimat saran optimasi hemat yang sangat spesifik berdasarkan
 `;
 
       const { text } = await generateText({
-        model: githubOpenAI('gpt-4.1-mini'),
+        model: githubOpenAI('gpt-4o-mini'),
         prompt,
         temperature: 0.3
       });

@@ -105,31 +105,31 @@ export async function POST(req: Request) {
     const dbCategories = categoriesRes.data || [];
 
     // Filter transactions to get current month ones for stats in-memory
-    const currentMonthTx = allTransactions.filter(t => t.transaction_date >= startOfMonthStr);
+    const currentMonthTx = allTransactions.filter((t: any) => t.transaction_date >= startOfMonthStr);
 
     // Calculate current month statistics
     const actualIncomeThisMonth = currentMonthTx
-      .filter(t => t.type === 'INCOME')
-      .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+      .filter((t: any) => t.type === 'INCOME')
+      .reduce((sum: number, t: any) => sum + parseFloat(t.amount), 0);
       
     const actualExpenseThisMonth = currentMonthTx
-      .filter(t => t.type === 'EXPENSE')
-      .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+      .filter((t: any) => t.type === 'EXPENSE')
+      .reduce((sum: number, t: any) => sum + parseFloat(t.amount), 0);
 
     const categoryTotals: { [name: string]: number } = {};
     currentMonthTx
-      .filter(t => t.type === 'EXPENSE')
-      .forEach(t => {
-        const catName = dbCategories.find(c => c.id === t.category_id)?.name || 'Lainnya';
+      .filter((t: any) => t.type === 'EXPENSE')
+      .forEach((t: any) => {
+        const catName = dbCategories.find((c: any) => c.id === t.category_id)?.name || 'Lainnya';
         categoryTotals[catName] = (categoryTotals[catName] || 0) + parseFloat(t.amount);
       });
 
     // COMPUTE DERIVED METRICS BEFORE INJECTING TO PROMPT
-    const totalBalance = accounts.reduce((sum, acc) => sum + parseFloat(acc.balance), 0);
-    const incomes = recurring.filter(r => r.type === 'INCOME');
-    const expenses = recurring.filter(r => r.type === 'EXPENSE');
-    const totalIncome = incomes.reduce((sum, i) => sum + parseFloat(i.amount), 0);
-    const totalExpense = expenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
+    const totalBalance = accounts.reduce((sum: number, acc: any) => sum + parseFloat(acc.balance), 0);
+    const incomes = recurring.filter((r: any) => r.type === 'INCOME');
+    const expenses = recurring.filter((r: any) => r.type === 'EXPENSE');
+    const totalIncome = incomes.reduce((sum: number, i: any) => sum + parseFloat(i.amount), 0);
+    const totalExpense = expenses.reduce((sum: number, e: any) => sum + parseFloat(e.amount), 0);
     const netCashFlow = totalIncome - totalExpense;
 
     const savingsRate = totalIncome > 0
@@ -178,11 +178,31 @@ export async function POST(req: Request) {
     }`;
     }
 
+    // Parameter Keuangan Pengguna
+    const userParams = simulator?.userParameters || null;
+    const opAcc = accounts.find((a: any) => a.id === userParams?.operatingAccountId);
+    const savAcc = accounts.find((a: any) => a.id === userParams?.savingsAccountId);
+
+    const userParamsSummary = userParams ? `
+## PARAMETER KEUTAMAAN PENGGUNA (${profile.toUpperCase()}):
+- Gaji Bulanan Utama: **${formatRp(userParams.monthlySalary || 0)}**
+- Target Nabung Sebulan: **${formatRp(userParams.monthlySavingsGoal || 0)}**
+- Rekening Kebutuhan Sebulan / Operasional: **${opAcc ? `${opAcc.name} (${formatRp(opAcc.balance)})` : 'Belum ditentukan'}**
+- Rekening Utama Khusus Tabungan: **${savAcc ? `${savAcc.name} (${formatRp(savAcc.balance)})` : 'Belum ditentukan'}**
+- Rincian Pengeluaran Rutin Pengguna:
+  * 👨‍👩‍👦 Jatah Orang Tua: **${formatRp(userParams.expenses?.parentAllowance || 0)}**
+  * 🛵 Service & Bensin Motor: **${formatRp(userParams.expenses?.motorService || 0)}**
+  * 🏥 BPJS / Kesehatan: **${formatRp(userParams.expenses?.bpjsHealth || 0)}**
+  * 🌐 Internet & Tagihan: **${formatRp(userParams.expenses?.internetBill || 0)}**
+  * ☕ Uang Jajan / Operasional: **${formatRp(userParams.expenses?.pocketMoney || 0)}**
+  * 📦 Pengeluaran Lainnya: **${formatRp(userParams.expenses?.otherExpenses || 0)}**
+` : '';
+
     // Ringkasan transaksi terbaru
     const recentSummary = allTransactions.length > 0
       ? `\n## TRANSAKSI TERBARU (Maksimal 30):\n` +
-        allTransactions.slice(0, 30).map(t => {
-          const catName = dbCategories.find(c => c.id === t.category_id)?.name || 'Lainnya';
+        allTransactions.slice(0, 30).map((t: any) => {
+          const catName = dbCategories.find((c: any) => c.id === t.category_id)?.name || 'Lainnya';
           return `- ID: ${t.id} | [${t.type}] ${t.description} (${catName}): **${formatRp(t.amount)}** (${t.transaction_date})`;
         }).join('\n')
       : '';
@@ -199,10 +219,11 @@ Waktu & tanggal saat ini: ${now}
 ---
 
 # SNAPSHOT KEUANGAN PENGGUNA
+${userParamsSummary}
 
 ## Rekening
 ${accounts.length > 0
-  ? accounts.map(a => `- ${a.name} (${a.type || 'Bank'}): **${formatRp(a.balance)}**`).join('\n')
+  ? accounts.map((a: any) => `- ${a.name} (${a.type || 'Bank'}): **${formatRp(a.balance)}**`).join('\n')
   : '- Belum ada rekening terdaftar'}
 - **Total Saldo: ${formatRp(totalBalance)}**
 
@@ -353,8 +374,8 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
     }
 
     // Vercel AI SDK useChat automatically sends the FULL conversation history in `messages`.
-    // To prevent AI lag and save tokens on very long chats, we only send the last 10 messages for context.
-    const recentMessages = messages.slice(-10).map((msg: any, idx: number, arr: any[]) => {
+    // To prevent AI lag and save tokens on very long chats, we only send the last 5 messages for context.
+    const recentMessages = messages.slice(-5).map((msg: any, idx: number, arr: any[]) => {
       const isLastMessage = idx === arr.length - 1;
 
       // If there are experimental attachments (specifically images), convert the message to a multimodal content array
@@ -436,12 +457,13 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
       '  5. Setelah memanggil `extract_receipt_data` dan menerima hasilnya, sampaikan penjelasan ramah bahwa draf data struk belanja telah berhasil diekstrak dan minta pengguna untuk memeriksa dan menyimpannya melalui kartu konfirmasi yang muncul di bawah obrolan.\n\n' +
       '## ATURAN PEMICU AKSI (WAJIB DIPATUHI)\n' +
       'Kamu HANYA boleh memanggil function/tool add_transaction, delete_transaction, create_transfer, atau add_saving_goal jika pesan user mengandung KATA KERJA IMPERATIF eksplisit yang secara langsung memerintahkan aksi, contoh: "catat", "tambahkan", "masukkan", "input", "simpan", "hapus", "batalkan", "hilangkan", "transfer", "pindahkan", "buat target". *Khusus untuk pemindaian struk belanja di atas, kamu berhak memanggil tool `extract_receipt_data` secara otomatis tanpa perlu perintah teks tambahan.*\n\n' +
+      'Untuk tool `search_transactions`, kamu **DIPERBOLEHKAN** memanggilnya kapan saja pengguna menanyakan tentang riwayat pengeluaran masa lalu, total pembelian barang tertentu (misal: "berapa kali saya beli jago?"), atau mencari transaksi lama, bahkan tanpa kata kerja imperatif.\n\n' +
       'DILARANG memanggil function apapun jika user:\n' +
       '- Hanya bercerita/curhat tentang pengeluaran/pemasukan tanpa perintah ("tadi aku jajan kopi 20rb", "kemarin service motor abis 150rb")\n' +
       '- Menyebut angka sebagai konteks pertanyaan, bukan instruksi ("kalau aku beli motor 20 juta, aman gak?")\n' +
       '- Menyatakan fakta masa lalu tanpa kata kerja perintah eksplisit ("BCA ku baru masuk gaji 6 juta")\n\n' +
       'JIKA AMBIGU (ada angka + transaksi, tapi tidak ada kata kerja perintah yang jelas, atau perintah bercampur dengan curhat panjang):\n' +
-      '- JANGAN langsung eksekusi function.\n' +
+      '- JANGAN langsung eksekusi function pencatatan.\n' +
       '- Tanya konfirmasi dulu: "Mau aku catat sebagai transaksi ya?" atau konfirmasi yang setara.\n' +
       '- Baru panggil function SETELAH user menjawab ya/konfirmasi eksplisit di giliran (turn) berikutnya.\n\n' +
       'Prioritaskan respons teks (empati/saran/analisis) as default. Trigger function adalah PENGECUALIAN, bukan default behavior. Pikirkan langkah demi langkah secara logis sebelum memberikan jawaban yang melibatkan angka atau perhitungan.';
@@ -481,8 +503,12 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
             },
             category: { 
               type: 'string', 
-              enum: ['Makanan', 'Transportasi', 'Hiburan', 'Tagihan', 'Belanja', 'Lainnya'],
-              description: 'Kategori pengeluaran yang paling cocok.' 
+              enum: ['Makanan & Minuman', 'Transportasi', 'Belanja Bulanan', 'Kesehatan', 'Hiburan', 'Tagihan & Utilitas', 'Lainnya'],
+              description: 'Kategori pengeluaran yang paling cocok dari daftar kategori database.' 
+            },
+            accountName: {
+              type: 'string',
+              description: 'Nama metode pembayaran/rekening yang tertera di struk atau disebutkan user (misal: BCA, Mandiri, Cash, Gopay, dll).'
             },
             confidence: { 
               type: 'string', 
@@ -559,6 +585,7 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
                 date: args.date,
                 amount: args.amount,
                 category: args.category,
+                accountName: args.accountName || '',
                 confidence: args.confidence,
                 items: args.items || [],
                 imageHash
@@ -629,7 +656,7 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
             
             let matchedAccount = null;
             if (searchAccount) {
-              matchedAccount = dbAccounts.find(acc => 
+              matchedAccount = dbAccounts.find((acc: any) => 
                 acc.name.toLowerCase().includes(searchAccount) || 
                 searchAccount.includes(acc.name.toLowerCase())
               );
@@ -637,7 +664,7 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
             
             if (!matchedAccount) {
               // Fallback to description matching
-              matchedAccount = dbAccounts.find(acc => 
+              matchedAccount = dbAccounts.find((acc: any) => 
                 descLower.includes(acc.name.toLowerCase()) || 
                 acc.name.toLowerCase().includes(descLower)
               );
@@ -646,8 +673,8 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
             if (matchedAccount) {
               accountId = matchedAccount.id;
             } else {
-              const defaultAcc = dbAccounts.find(acc => acc.type === 'CASH') || 
-                                 dbAccounts.find(acc => acc.type === 'BANK') || 
+              const defaultAcc = dbAccounts.find((acc: any) => acc.type === 'CASH') || 
+                                 dbAccounts.find((acc: any) => acc.type === 'BANK') || 
                                  dbAccounts[0];
               accountId = defaultAcc.id;
             }
@@ -655,9 +682,9 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
             // 3. Match Category ID
             let categoryId: string | null = null;
             const aiCategoryLower = (category || '').toLowerCase();
-            const typedCategories = dbCategories.filter(cat => cat.type === type);
+            const typedCategories = dbCategories.filter((cat: any) => cat.type === type);
             
-            const matchedCategory = typedCategories.find(cat => 
+            const matchedCategory = typedCategories.find((cat: any) => 
               cat.name.toLowerCase().includes(aiCategoryLower) || 
               aiCategoryLower.includes(cat.name.toLowerCase())
             );
@@ -665,7 +692,7 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
             if (matchedCategory) {
               categoryId = matchedCategory.id;
             } else {
-              const fallbackCategory = typedCategories.find(cat => cat.name.toLowerCase().includes('lain')) ||
+              const fallbackCategory = typedCategories.find((cat: any) => cat.name.toLowerCase().includes('lain')) ||
                                        typedCategories[0];
               categoryId = fallbackCategory ? fallbackCategory.id : null;
             }
@@ -685,7 +712,7 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
               return { success: false, error: rpcError.message };
             }
             
-            const finalAccName = dbAccounts.find(a => a.id === accountId)?.name || 'Rekening';
+            const finalAccName = dbAccounts.find((a: any) => a.id === accountId)?.name || 'Rekening';
             
             return { 
               success: true, 
@@ -799,14 +826,14 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
 
             // Match source account
             const fromLower = fromAccount.toLowerCase();
-            const matchedFrom = dbAccounts.find(acc => 
+            const matchedFrom = dbAccounts.find((acc: any) => 
               acc.name.toLowerCase().includes(fromLower) || 
               fromLower.includes(acc.name.toLowerCase())
             );
 
             // Match destination account
             const toLower = toAccount.toLowerCase();
-            const matchedTo = dbAccounts.find(acc => 
+            const matchedTo = dbAccounts.find((acc: any) => 
               acc.name.toLowerCase().includes(toLower) || 
               toLower.includes(acc.name.toLowerCase())
             );
@@ -885,27 +912,106 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
             return { success: false, error: err.message };
           }
         }
+      }),
+
+      search_transactions: tool({
+        description: 'Mencari riwayat transaksi di database berdasarkan kata kunci (keyword) seperti nama barang, merchant, atau catatan. Gunakan tool ini jika pengguna menanyakan riwayat pembelian lama atau total transaksi spesifik yang mungkin tidak ada di daftar 150 transaksi terbaru.',
+        parameters: jsonSchema({
+          type: 'object',
+          properties: {
+            keyword: { 
+              type: 'string', 
+              description: 'Kata kunci pencarian (misal: "jago", "kopi", "bensin").' 
+            },
+            limit: {
+              type: 'integer',
+              description: 'Maksimal jumlah hasil yang dikembalikan (opsional, default 50).'
+            }
+          },
+          required: ['keyword']
+        }),
+        execute: async ({ keyword, limit = 50 }: any) => {
+          try {
+            const executeSupabase = createServerClient();
+            
+            // Search in description using ilike
+            const { data: results, error } = await executeSupabase
+              .from('transactions')
+              .select('id, description, amount, type, transaction_date, category_id')
+              .eq('profile', profile)
+              .ilike('description', `%${keyword}%`)
+              .order('transaction_date', { ascending: false })
+              .limit(limit);
+
+            if (error) {
+              return { success: false, error: error.message };
+            }
+
+            if (!results || results.length === 0) {
+              return { success: true, message: `Tidak ditemukan transaksi dengan kata kunci "${keyword}".` };
+            }
+
+            const formattedResults = results.map((t: any) => 
+              `- [${t.transaction_date}] ${t.type}: ${t.description} (Rp ${t.amount.toLocaleString('id-ID')})`
+            ).join('\n');
+
+            const totalAmount = results.reduce((sum: number, t: any) => sum + parseFloat(t.amount), 0);
+
+            return {
+              success: true,
+              message: `Ditemukan ${results.length} transaksi yang mengandung kata "${keyword}".\nTotal Nominal: Rp ${totalAmount.toLocaleString('id-ID')}\n\nRincian:\n${formattedResults}`
+            };
+          } catch (err: any) {
+            return { success: false, error: err.message };
+          }
+        }
       })
     };
+
+    // MULTI-MODEL TASK ROUTER (Menggabungkan logika n8n ke Webchat)
+    const lastMsgContent = (typeof lastUserMessage?.content === 'string' ? lastUserMessage.content : '').toLowerCase();
+    const hasAttachments = lastUserMessage?.experimental_attachments && lastUserMessage.experimental_attachments.length > 0;
+    const isMultimodal = Array.isArray(lastUserMessage?.content) && lastUserMessage.content.some((p: any) => p.type === 'image' || p.type === 'image_url');
+
+    const heavyKeywords = ['analisis', 'simulasi', 'proyeksi', 'investasi', 'strategi', 'evaluasi', 'breakdown', 'rekomendasi', 'perbandingan', 'rencana', 'iphone', 'jangka panjang', 'defisit', 'budget'];
+    const isHeavyAnalysis = heavyKeywords.some(kw => lastMsgContent.includes(kw));
+
+    let primaryModel = 'gpt-4o-mini';
+    let selectedMode = 'GENERAL';
+
+    if (hasAttachments || isMultimodal) {
+      primaryModel = 'gpt-4o';
+      selectedMode = 'VISION (OCR Struk)';
+    } else if (isHeavyAnalysis) {
+      primaryModel = 'gpt-4o';
+      selectedMode = 'HEAVY ANALYSIS (Penalaran Mendalam)';
+    } else {
+      primaryModel = 'gpt-4o-mini';
+      selectedMode = 'GENERAL (Chat & Catat Cepat)';
+    }
+
+    console.log(`[AI Router] Mode: ${selectedMode} | Model Target: ${primaryModel}`);
 
     let result;
     try {
       result = await streamText({
-        model: githubOpenAI('gpt-4.1-mini'),
+        model: githubOpenAI(primaryModel),
         system: systemInstructions,
         messages: recentMessages,
         temperature: 0.2,
         tools: chatTools,
+        maxSteps: 5,
         onFinish: onFinishCallback
       });
     } catch (err: any) {
-      console.warn('Failed to call gpt-4.1-mini, falling back to gpt-4o-mini:', err);
+      console.warn(`Failed to call ${primaryModel}, falling back to gpt-4o-mini:`, err);
       result = await streamText({
         model: githubOpenAI('gpt-4o-mini'),
         system: systemInstructions,
         messages: recentMessages,
         temperature: 0.2,
         tools: chatTools,
+        maxSteps: 5,
         onFinish: onFinishCallback
       });
     }

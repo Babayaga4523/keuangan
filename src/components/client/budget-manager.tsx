@@ -20,8 +20,8 @@ import {
   DialogDescription,
   DialogTrigger,
 } from '../ui/dialog';
-import { Loader2, Plus, Trash2, AlertCircle, CheckCircle2, TrendingUp } from 'lucide-react';
-import { actionUpsertBudget, actionDeleteBudget } from '@/lib/actions';
+import { Loader2, Plus, Trash2, AlertCircle, CheckCircle2, TrendingUp, Copy } from 'lucide-react';
+import { actionUpsertBudget, actionDeleteBudget, actionCopyPreviousMonthBudget } from '@/lib/actions';
 import { useRouter } from 'next/navigation';
 import { formatRupiah, parseFormattedNumber } from '@/utils/format';
 
@@ -63,11 +63,29 @@ export default function BudgetManager({ categories, budgets, transactions, month
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [categoryId, setCategoryId] = useState('');
   const [amount, setAmount] = useState('');
+
+  const handleCopyPrevious = async () => {
+    setCopying(true);
+    try {
+      const res = await actionCopyPreviousMonthBudget({ currentMonth: month, currentYear: year });
+      if (!res.success) {
+        alert(res.error || 'Gagal menyalin anggaran bulan sebelumnya.');
+      } else {
+        alert(`Berhasil menyalin ${res.data?.copiedCount} kategori anggaran dari bulan sebelumnya!`);
+        router.refresh();
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Terjadi kesalahan.');
+    } finally {
+      setCopying(false);
+    }
+  };
 
   // Calculate spent per category from transactions
   const spentByCategory: Record<string, number> = {};
@@ -124,13 +142,25 @@ export default function BudgetManager({ categories, budgets, transactions, month
             Kelola batas pengeluaran per kategori — {MONTH_NAMES[month - 1]} {year} &bull; Profil: <strong>{profile === 'yoga' ? '🧘 Yoga' : '🌿 Silva'}</strong>
           </p>
         </div>
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (v) setErrorMsg(null); }}>
-          <DialogTrigger render={
-            <button className="flex items-center gap-1.5 px-4 py-2 bg-black text-white hover:bg-black/90 transition-all text-xs font-bold rounded-lg shrink-0">
-              <Plus className="h-4 w-4" />
-              <span>Tambah Budget</span>
-            </button>
-          } />
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleCopyPrevious}
+            disabled={copying}
+            className="flex items-center gap-1.5 px-3 py-2 border-[#c6c6cd] text-xs font-bold rounded-lg"
+          >
+            {copying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4 text-slate-700" />}
+            <span>Salin Anggaran Bulan Lalu</span>
+          </Button>
+
+          <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (v) setErrorMsg(null); }}>
+            <DialogTrigger render={
+              <button className="flex items-center gap-1.5 px-4 py-2 bg-black text-white hover:bg-black/90 transition-all text-xs font-bold rounded-lg shrink-0">
+                <Plus className="h-4 w-4" />
+                <span>Tambah Budget</span>
+              </button>
+            } />
           <DialogContent className="sm:max-w-[400px] border border-[#e2e8f0] bg-white rounded-xl shadow-lg">
             <DialogHeader>
               <DialogTitle className="text-slate-800 text-lg font-bold">Set Budget Kategori</DialogTitle>
@@ -182,7 +212,8 @@ export default function BudgetManager({ categories, budgets, transactions, month
               </div>
             </form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       {/* Summary Cards */}

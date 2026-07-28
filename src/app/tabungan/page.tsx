@@ -23,6 +23,7 @@ export default async function TabunganPage() {
       .from('accounts')
       .select('*')
       .eq('profile', profile)
+      .eq('is_active', true)
       .order('name')
   ]);
 

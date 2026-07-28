@@ -1,0 +1,625 @@
+{
+  "name": "AI Financial Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "financial-assistant",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "13508140-b808-4d83-976a-b7ceaf7277f1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-640, 512],
+      "webhookId": "392a4780-b8bf-4056-9e01-61f7a2d03558"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "ocr-type",
+                    "leftValue": "={{ $json.body.chat_type }}",
+                    "rightValue": "RECEIPT_OCR",
+                    "operator": { "type": "string", "operation": "equals" }
+                  },
+                  {
+                    "id": "ocr-image",
+                    "leftValue": "={{ $json.body.image_url }}",
+                    "rightValue": "",
+                    "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "RECEIPT_OCR"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "heavy-type",
+                    "leftValue": "={{ $json.body.chat_type }}",
+                    "rightValue": "HEAVY_ANALYSIS",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "HEAVY_ANALYSIS"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "GENERAL"
+        }
+      },
+      "id": "b4ab00e6-99cb-44e0-9da1-b2d18d4436ff",
+      "name": "Task Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [-416, 496]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=User message: {{ $json.body.messages ? $json.body.messages[$json.body.messages.length - 1].content : ($json.body.chatInput || '') }}\n\nReceipt image URL: {{ $json.body.image_url || 'tidak ada' }}",
+        "options": {
+          "systemMessage": "Kamu adalah Amanah AI, asisten keuangan pribadi cerdas yang bertugas mengekstrak data dari foto struk/nota belanja.\n\n## INSTRUKSI UTAMA\n1. Ketika menerima URL gambar struk/nota, analisis gambar tersebut dan ekstrak: nama toko/merchant, tanggal transaksi, daftar item beserta harga, dan total pengeluaran.\n2. Setelah berhasil mengekstrak data, WAJIB panggil tool `get_accounts` terlebih dahulu untuk mendapatkan daftar rekening beserta UUID-nya.\n3. Lalu panggil tool `get_categories` untuk mendapatkan daftar kategori beserta UUID-nya.\n4. Baru kemudian panggil tool `create_transaction` untuk mencatat transaksi ke database.\n   Tool ini memanggil database function fn_create_transaction yang OTOMATIS mengupdate saldo rekening.\n   Parameter yang WAJIB diisi:\n   - p_account_id: UUID rekening dari hasil get_accounts (tanyakan user jika tidak jelas)\n   - p_category_id: UUID kategori dari hasil get_categories yang paling cocok\n   - p_amount: angka total belanja (positif, tanpa simbol Rp, contoh: 35000)\n   - p_type: 'EXPENSE' untuk pengeluaran, 'INCOME' untuk pemasukan\n   - p_date: format YYYY-MM-DD (gunakan tanggal hari ini jika tidak disebutkan)\n   - p_description: deskripsi singkat transaksi\n5. JANGAN PERNAH mengarang UUID. Selalu ambil dari hasil tool get_accounts dan get_categories.\n6. Konfirmasi ke user setelah berhasil mencatat, tampilkan ringkasan dengan format Rupiah (Rp).\n\n## DATABASE SCHEMA\n- accounts: id(UUID), name, type(CASH/BANK/E_WALLET), balance, currency(IDR)\n- categories: id(UUID), name, type(INCOME/EXPENSE), icon, color\n- transactions: id(UUID), account_id(FK), category_id(FK), destination_account_id(FK nullable), amount(DECIMAL >0), type(INCOME/EXPENSE/TRANSFER), transaction_date(DATE), description(TEXT)\n- saving_goals: id(UUID), name, target_amount, current_amount, deadline, is_completed\n\n## BAHASA\nSelalu jawab dalam Bahasa Indonesia yang ramah dan profesional. Gunakan emoji yang relevan.",
+          "enableStreaming": false
+        }
+      },
+      "id": "4e4d4e61-ab7c-4f81-9a4c-1989fcecd3c5",
+      "name": "Amanah AI (Vision)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o",
+          "cachedResultName": "gpt-4o"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "id": "3edebca9-4b1e-4af1-9492-b2fa4afbfa3c",
+      "name": "GPT-4o (Vision)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-192, 224],
+      "credentials": {
+        "openAiApi": {
+          "id": "RsA9AmJr5Ux1aXtU",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Webhook').first().json.body?.sessionId || 'session_1' }}",
+        "contextWindowLength": 10
+      },
+      "id": "d54ca23e-7684-4413-9663-c5b8d21efed7",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [-64, 224]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://bbqzbfuoisswuluzlodj.supabase.co/rest/v1/rpc/fn_create_transaction",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJicXpiZnVvaXNzd3VsdXpsb2RqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI5MDcwNjgsImV4cCI6MjA2ODQ4MzA2OH0.lCdmEVJXpIr8KLkvfIThPduC32VmNy3JWTc0PXLXWQY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_account_id\": \"{{ $fromAI('p_account_id', 'UUID rekening dari hasil get_accounts', 'string') }}\",\n  \"p_category_id\": \"{{ $fromAI('p_category_id', 'UUID kategori dari hasil get_categories', 'string') }}\",\n  \"p_amount\": {{ $fromAI('p_amount', 'Jumlah uang transaksi sebagai angka positif tanpa simbol Rp', 'number') }},\n  \"p_type\": \"{{ $fromAI('p_type', 'Jenis transaksi: INCOME atau EXPENSE', 'string') }}\",\n  \"p_description\": \"{{ $fromAI('p_description', 'Deskripsi singkat transaksi', 'string') }}\",\n  \"p_date\": \"{{ $fromAI('p_date', 'Tanggal transaksi format YYYY-MM-DD', 'string') }}\"\n}",
+        "toolDescription": "Mencatat transaksi keuangan baru ke database. Tool ini memanggil database function fn_create_transaction yang secara OTOMATIS mengupdate saldo rekening dan melakukan validasi apakah saldo mencukupi. WAJIB panggil get_accounts dan get_categories terlebih dahulu untuk mendapatkan UUID yang valid. Parameter: p_account_id (UUID rekening), p_category_id (UUID kategori), p_amount (angka positif), p_type (INCOME atau EXPENSE), p_description (deskripsi singkat), p_date (YYYY-MM-DD).",
+        "options": {}
+      },
+      "id": "76441b27-30f6-4478-ae92-7f5aa752b996",
+      "name": "create_transaction",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [64, 224]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "accounts",
+        "filterType": "none",
+        "toolDescription": "Mengambil semua data rekening/dompet pengguna dari database. Mengembalikan daftar rekening beserta id (UUID), name (nama rekening), type (CASH/BANK/E_WALLET), balance (saldo), currency (mata uang). Gunakan UUID dari hasil tool ini untuk parameter p_account_id saat mencatat transaksi."
+      },
+      "id": "276331b8-2a9f-4006-99d4-ef0d3283a990",
+      "name": "get_accounts",
+      "type": "n8n-nodes-base.supabaseTool",
+      "typeVersion": 1,
+      "position": [192, 224],
+      "credentials": {
+        "supabaseApi": {
+          "id": "wRw10kvfLRGBS5Rr",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "saving_goals",
+        "filterType": "none",
+        "toolDescription": "Mengambil semua data target tabungan pengguna. Mengembalikan id (UUID), name (nama target), target_amount (jumlah target), current_amount (jumlah saat ini), deadline (tenggat), is_completed (apakah sudah tercapai)."
+      },
+      "id": "1a5e39ca-d414-46b6-98f9-a82fdc68669e",
+      "name": "get_saving_goals",
+      "type": "n8n-nodes-base.supabaseTool",
+      "typeVersion": 1,
+      "position": [320, 224],
+      "credentials": {
+        "supabaseApi": {
+          "id": "wRw10kvfLRGBS5Rr",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "transactions",
+        "filterType": "none",
+        "toolDescription": "Mengambil semua riwayat transaksi keuangan pengguna. Mengembalikan id (UUID), account_id, category_id, amount, type (INCOME/EXPENSE/TRANSFER), transaction_date, description. Gunakan UUID transaksi dari hasil tool ini untuk parameter p_tx_id saat menghapus transaksi."
+      },
+      "id": "8f2191ab-62a2-4cb1-80f4-d572e9a2b8e3",
+      "name": "get_transactions",
+      "type": "n8n-nodes-base.supabaseTool",
+      "typeVersion": 1,
+      "position": [448, 224],
+      "credentials": {
+        "supabaseApi": {
+          "id": "wRw10kvfLRGBS5Rr",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "categories",
+        "filterType": "none",
+        "toolDescription": "Mengambil semua data kategori transaksi. Mengembalikan id (UUID), name (nama kategori seperti Makanan & Minuman, Transportasi, Gaji & Pendapatan dll), type (INCOME atau EXPENSE). Gunakan UUID dari hasil tool ini untuk parameter p_category_id saat mencatat transaksi."
+      },
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "get_categories",
+      "type": "n8n-nodes-base.supabaseTool",
+      "typeVersion": 1,
+      "position": [576, 224],
+      "credentials": {
+        "supabaseApi": {
+          "id": "wRw10kvfLRGBS5Rr",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://bbqzbfuoisswuluzlodj.supabase.co/rest/v1/rpc/fn_delete_transaction",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJicXpiZnVvaXNzd3VsdXpsb2RqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI5MDcwNjgsImV4cCI6MjA2ODQ4MzA2OH0.lCdmEVJXpIr8KLkvfIThPduC32VmNy3JWTc0PXLXWQY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_tx_id\": \"{{ $fromAI('p_tx_id', 'UUID transaksi yang akan dihapus dari hasil get_transactions', 'string') }}\"\n}",
+        "toolDescription": "Menghapus transaksi dari database dan secara OTOMATIS mengembalikan (rollback) saldo rekening terkait. Untuk INCOME: saldo dikurangi. Untuk EXPENSE: saldo ditambah kembali. Untuk TRANSFER: saldo dikembalikan ke kedua rekening. WAJIB panggil get_transactions terlebih dahulu untuk mendapatkan UUID transaksi. Konfirmasi ke user sebelum menghapus. Parameter: p_tx_id (UUID transaksi).",
+        "options": {}
+      },
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "name": "delete_transaction",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [704, 224]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://bbqzbfuoisswuluzlodj.supabase.co/rest/v1/rpc/fn_create_transfer",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJicXpiZnVvaXNzd3VsdXpsb2RqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI5MDcwNjgsImV4cCI6MjA2ODQ4MzA2OH0.lCdmEVJXpIr8KLkvfIThPduC32VmNy3JWTc0PXLXWQY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"p_from_account_id\": \"{{ $fromAI('p_from_account_id', 'UUID rekening sumber pengirim dari get_accounts', 'string') }}\",\n  \"p_to_account_id\": \"{{ $fromAI('p_to_account_id', 'UUID rekening tujuan penerima dari get_accounts', 'string') }}\",\n  \"p_amount\": {{ $fromAI('p_amount', 'Jumlah uang yang ditransfer sebagai angka positif', 'number') }},\n  \"p_description\": \"{{ $fromAI('p_description', 'Catatan singkat transfer (opsional)', 'string') }}\",\n  \"p_date\": \"{{ $fromAI('p_date', 'Tanggal transfer format YYYY-MM-DD', 'string') }}\"\n}",
+        "toolDescription": "Memindahkan saldo antar rekening secara atomik dan aman. Tool ini memanggil database function fn_create_transfer yang OTOMATIS mengurangi saldo rekening sumber dan menambah saldo rekening tujuan, serta memvalidasi apakah saldo sumber mencukupi. WAJIB panggil get_accounts terlebih dahulu untuk mendapatkan UUID rekening sumber dan tujuan. Parameter: p_from_account_id (UUID rekening sumber), p_to_account_id (UUID rekening tujuan), p_amount (nominal), p_description (catatan), p_date (YYYY-MM-DD).",
+        "options": {}
+      },
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "name": "create_transfer",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [832, 224]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"output\": $json.output, \"model_used\": $json.model_used } }}",
+        "options": {}
+      },
+      "id": "ba1a608d-3e32-4ade-9b73-a01ef323e06f",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [752, 512]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.messages ? $json.body.messages[$json.body.messages.length - 1].content : ($json.body.chatInput || '') }}",
+        "options": {
+          "systemMessage": "Kamu adalah Amanah AI, asisten keuangan pribadi yang ahli dalam analisis matematika keuangan, simulasi budget, dan perencanaan keuangan jangka panjang.\n\n## INSTRUKSI UTAMA\n1. Untuk SETIAP pertanyaan terkait data keuangan, WAJIB panggil tool yang relevan terlebih dahulu. JANGAN PERNAH menjawab berdasarkan asumsi tanpa data.\n2. Urutan tool yang benar:\n   a. Panggil `get_accounts` untuk mengetahui daftar rekening dan saldo terkini.\n   b. Panggil `get_transactions` untuk melihat riwayat transaksi.\n   c. Panggil `get_categories` untuk mengetahui daftar kategori (UUID dan nama).\n   d. Panggil `get_saving_goals` untuk melihat target tabungan.\n3. Saat mencatat transaksi baru, panggil tool `create_transaction` dengan parameter:\n   - p_account_id: UUID dari get_accounts (JANGAN mengarang)\n   - p_category_id: UUID dari get_categories (JANGAN mengarang)\n   - p_amount: angka positif (tanpa simbol Rp, contoh: 50000)\n   - p_type: 'INCOME' atau 'EXPENSE'\n   - p_date: format YYYY-MM-DD\n   - p_description: deskripsi singkat\n   Tool ini secara otomatis mengupdate saldo rekening dan melakukan validasi saldo.\n4. Untuk TRANSFER antar rekening, panggil tool `create_transfer` dengan parameter:\n   - p_from_account_id: UUID rekening sumber dari get_accounts\n   - p_to_account_id: UUID rekening tujuan dari get_accounts\n   - p_amount: nominal transfer\n   - p_description: catatan (opsional)\n   - p_date: YYYY-MM-DD (opsional)\n5. Untuk HAPUS transaksi, panggil tool `delete_transaction` dengan parameter:\n   - p_tx_id: UUID transaksi yang akan dihapus (dari get_transactions)\n   Tool ini otomatis mengembalikan saldo rekening.\n\n## DATABASE SCHEMA\n- accounts: id(UUID), name(VARCHAR), type(CASH/BANK/E_WALLET), balance(DECIMAL), currency(IDR), is_active(BOOLEAN)\n- categories: id(UUID), name(VARCHAR), type(INCOME/EXPENSE), icon, color\n- transactions: id(UUID), account_id(FK), category_id(FK), destination_account_id(FK, nullable), amount(DECIMAL >0), type(INCOME/EXPENSE/TRANSFER), transaction_date(DATE), description(TEXT)\n- saving_goals: id(UUID), name, target_amount(DECIMAL), current_amount(DECIMAL), deadline(DATE), is_completed(BOOLEAN)\n\n## ATURAN ANALISIS\n- Tunjukkan langkah perhitungan secara jelas dan terstruktur.\n- Gunakan format Rupiah (Rp) pada setiap angka uang.\n- Berikan rekomendasi yang actionable dan berbasis data nyata dari database.\n- Untuk simulasi, tampilkan skenario optimis dan konservatif.\n\n## BAHASA\nSelalu jawab dalam Bahasa Indonesia yang profesional.",
+          "enableStreaming": false
+        }
+      },
+      "id": "4fd97bf0-f7f9-4639-97dc-9f70d6335550",
+      "name": "Amanah AI (Heavy Analysis)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [0, 400]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "DeepSeek-R1",
+          "mode": "id"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "id": "7a8f6e29-38d3-48e3-ac56-5d5f035159ba",
+      "name": "DeepSeek-R1 (Heavy Analysis)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [64, 624],
+      "credentials": {
+        "openAiApi": {
+          "id": "RsA9AmJr5Ux1aXtU",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.messages ? $json.body.messages[$json.body.messages.length - 1].content : ($json.body.chatInput || '') }}",
+        "options": {
+          "systemMessage": "Kamu adalah Amanah AI, asisten keuangan pribadi yang ramah, cerdas, dan sangat membantu untuk percakapan harian seputar keuangan.\n\n## INSTRUKSI UTAMA — WAJIB DIIKUTI\n1. JANGAN PERNAH menjawab pertanyaan tentang saldo, transaksi, rekening, atau tabungan TANPA memanggil tool terlebih dahulu. Kamu TIDAK memiliki pengetahuan tentang data keuangan user kecuali dari hasil tool.\n2. Urutan wajib saat user bertanya tentang data keuangan:\n   a. Panggil `get_accounts` → untuk daftar rekening dan saldo.\n   b. Panggil `get_transactions` → untuk riwayat transaksi.\n   c. Panggil `get_categories` → untuk daftar kategori dan UUID-nya.\n   d. Panggil `get_saving_goals` → untuk target tabungan.\n3. Saat user ingin MENCATAT transaksi baru:\n   a. WAJIB panggil `get_accounts` dulu untuk mendapatkan UUID rekening.\n   b. WAJIB panggil `get_categories` dulu untuk mendapatkan UUID kategori.\n   c. Baru panggil `create_transaction` dengan parameter:\n      - p_account_id: UUID dari hasil get_accounts (JANGAN PERNAH mengarang UUID)\n      - p_category_id: UUID dari hasil get_categories (JANGAN PERNAH mengarang UUID)\n      - p_amount: angka positif tanpa simbol (contoh: 50000)\n      - p_type: 'EXPENSE' untuk pengeluaran, 'INCOME' untuk pemasukan\n      - p_date: YYYY-MM-DD (hari ini jika tidak disebutkan)\n      - p_description: ringkasan singkat\n   Tool create_transaction akan OTOMATIS mengupdate saldo rekening dan validasi apakah saldo cukup.\n4. Untuk TRANSFER antar rekening, panggil `create_transfer` dengan:\n   - p_from_account_id: UUID rekening sumber (dari get_accounts)\n   - p_to_account_id: UUID rekening tujuan (dari get_accounts)\n   - p_amount: nominal transfer\n   - p_description: catatan (opsional)\n   - p_date: YYYY-MM-DD (opsional)\n5. Untuk HAPUS transaksi, panggil `delete_transaction` dengan:\n   - p_tx_id: UUID transaksi dari get_transactions\n   Tool ini otomatis mengembalikan (rollback) saldo rekening. Konfirmasi dulu ke user sebelum menghapus.\n6. Jika user bertanya rekening mana yang dipakai dan ada beberapa pilihan, TANYAKAN dulu sebelum mencatat.\n\n## DATABASE SCHEMA (untuk referensi internal)\n- accounts: id(UUID), name, type(CASH/BANK/E_WALLET), balance(DECIMAL), currency(IDR), is_active\n- categories: id(UUID), name, type(INCOME/EXPENSE)\n- transactions: id(UUID), account_id(FK), category_id(FK), destination_account_id(FK, nullable), amount(DECIMAL >0), type(INCOME/EXPENSE/TRANSFER), transaction_date(DATE), description(TEXT)\n- saving_goals: id(UUID), name, target_amount, current_amount, deadline, is_completed\n\n## CONTOH ALUR KERJA\nUser: \"Catat pengeluaran makan siang Rp 35.000 dari BCA\"\n→ Panggil get_accounts → cari rekening 'Bank BCA' → ambil UUID-nya (misal: abc-123)\n→ Panggil get_categories → cari kategori 'Makanan & Minuman' type EXPENSE → ambil UUID-nya (misal: def-456)\n→ Panggil create_transaction dengan: p_account_id='abc-123', p_category_id='def-456', p_amount=35000, p_type='EXPENSE', p_date='2026-07-28', p_description='Makan siang'\n→ Konfirmasi: \"Transaksi berhasil dicatat! Pengeluaran Rp 35.000 untuk Makan siang dari rekening Bank BCA.\"\n\nUser: \"Berapa saldo saya?\"\n→ Panggil get_accounts → tampilkan semua rekening beserta saldo dalam format Rupiah.\n\nUser: \"Hapus transaksi makan tadi\"\n→ Panggil get_transactions → cari transaksi yang cocok → konfirmasi dulu ke user\n→ Setelah dikonfirmasi, panggil delete_transaction dengan p_tx_id=UUID_TRANSAKSI\n\nUser: \"Transfer 100rb dari BCA ke Cash\"\n→ Panggil get_accounts → ambil UUID BCA dan UUID Cash\n→ Panggil create_transfer dengan p_from_account_id=UUID_BCA, p_to_account_id=UUID_CASH, p_amount=100000\n\n## FORMAT RESPONS\n- Selalu gunakan format Rupiah: Rp 50.000 (dengan titik pemisah ribuan).\n- Jawab dengan singkat, jelas, dan to the point.\n- Jika menampilkan banyak data, gunakan format list atau tabel.\n\n## BAHASA\nSelalu jawab dalam Bahasa Indonesia yang santun dan ramah.",
+          "enableStreaming": false
+        }
+      },
+      "id": "5ca44b2c-b94d-4fae-885a-fd43804fb17b",
+      "name": "Amanah AI (General)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [0, 912]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-4o-mini"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "id": "5744a46f-0e6e-419b-b3ea-c09183a11d0c",
+      "name": "GPT-4o-mini (General)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [64, 1136],
+      "credentials": {
+        "openAiApi": {
+          "id": "RsA9AmJr5Ux1aXtU",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "01a7ce61-bc17-4d2e-97ed-9bc0e91794a0",
+              "name": "model_used",
+              "value": "gpt-4o",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [528, 192],
+      "id": "0c692fab-8ab7-4888-a5ce-7b614d3ba85a",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "750e96be-2a71-4cde-a21e-a7365963a8f6",
+              "name": "model_used",
+              "value": "DeepSeek-R1",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [512, 528],
+      "id": "f8e77f28-9864-42ef-943e-0d77e8e06e8e",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d4211dba-4474-4bec-bc26-e5265966a7d7",
+              "name": "model_used",
+              "value": "gpt-4o-mini",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [480, 896],
+      "id": "9dfde280-bd51-4c77-ae0e-eebba49c1ca9",
+      "name": "Edit Fields2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          { "node": "Task Router", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Task Router": {
+      "main": [
+        [
+          { "node": "Amanah AI (Vision)", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Amanah AI (Heavy Analysis)", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Amanah AI (General)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "GPT-4o (Vision)": {
+      "ai_languageModel": [
+        [
+          { "node": "Amanah AI (Vision)", "type": "ai_languageModel", "index": 0 }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          { "node": "Amanah AI (Vision)", "type": "ai_memory", "index": 0 },
+          { "node": "Amanah AI (Heavy Analysis)", "type": "ai_memory", "index": 0 },
+          { "node": "Amanah AI (General)", "type": "ai_memory", "index": 0 }
+        ]
+      ]
+    },
+    "create_transaction": {
+      "ai_tool": [
+        [
+          { "node": "Amanah AI (Vision)", "type": "ai_tool", "index": 0 },
+          { "node": "Amanah AI (Heavy Analysis)", "type": "ai_tool", "index": 0 },
+          { "node": "Amanah AI (General)", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "get_accounts": {
+      "ai_tool": [
+        [
+          { "node": "Amanah AI (Vision)", "type": "ai_tool", "index": 0 },
+          { "node": "Amanah AI (Heavy Analysis)", "type": "ai_tool", "index": 0 },
+          { "node": "Amanah AI (General)", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "get_saving_goals": {
+      "ai_tool": [
+        [
+          { "node": "Amanah AI (Vision)", "type": "ai_tool", "index": 0 },
+          { "node": "Amanah AI (Heavy Analysis)", "type": "ai_tool", "index": 0 },
+          { "node": "Amanah AI (General)", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "get_transactions": {
+      "ai_tool": [
+        [
+          { "node": "Amanah AI (Vision)", "type": "ai_tool", "index": 0 },
+          { "node": "Amanah AI (Heavy Analysis)", "type": "ai_tool", "index": 0 },
+          { "node": "Amanah AI (General)", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "get_categories": {
+      "ai_tool": [
+        [
+          { "node": "Amanah AI (Vision)", "type": "ai_tool", "index": 0 },
+          { "node": "Amanah AI (Heavy Analysis)", "type": "ai_tool", "index": 0 },
+          { "node": "Amanah AI (General)", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "delete_transaction": {
+      "ai_tool": [
+        [
+          { "node": "Amanah AI (Vision)", "type": "ai_tool", "index": 0 },
+          { "node": "Amanah AI (Heavy Analysis)", "type": "ai_tool", "index": 0 },
+          { "node": "Amanah AI (General)", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "create_transfer": {
+      "ai_tool": [
+        [
+          { "node": "Amanah AI (Vision)", "type": "ai_tool", "index": 0 },
+          { "node": "Amanah AI (Heavy Analysis)", "type": "ai_tool", "index": 0 },
+          { "node": "Amanah AI (General)", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "DeepSeek-R1 (Heavy Analysis)": {
+      "ai_languageModel": [
+        [
+          { "node": "Amanah AI (Heavy Analysis)", "type": "ai_languageModel", "index": 0 }
+        ]
+      ]
+    },
+    "GPT-4o-mini (General)": {
+      "ai_languageModel": [
+        [
+          { "node": "Amanah AI (General)", "type": "ai_languageModel", "index": 0 }
+        ]
+      ]
+    },
+    "Amanah AI (Vision)": {
+      "main": [
+        [
+          { "node": "Edit Fields", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          { "node": "Respond to Webhook", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Amanah AI (Heavy Analysis)": {
+      "main": [
+        [
+          { "node": "Edit Fields1", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          { "node": "Respond to Webhook", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Amanah AI (General)": {
+      "main": [
+        [
+          { "node": "Edit Fields2", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          { "node": "Respond to Webhook", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "4fg777gg-7a04-7gc8-dc88-3g78gig43a09",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6b32cb4100c95586d9924d4f19d6e340dd7b0984987a24c3f2a3f20f8e444c94"
+  },
+  "nodeGroups": [],
+  "id": "ZOvrAxdewKKSCoiU",
+  "tags": []
+}

@@ -56,10 +56,22 @@ export default function SimulatorManager({
 }: SimulatorManagerProps) {
   const savedState = savedConfig?.state || {};
 
-  // Target Dream State
+  const now = useMemo(() => new Date(), []);
   const [dreamName, setDreamName] = useState(savedState.dreamName || 'Barang Impian');
   const [dreamCost, setDreamCost] = useState(savedState.dreamCost || '0');
-  const [targetMonthOffset, setTargetMonthOffset] = useState(savedState.targetMonthOffset ?? 2); 
+  
+  // Timeline Start & Target Date States
+  const [startMonth, setStartMonth] = useState<number>(savedState.startMonth ?? now.getMonth());
+  const [startYear, setStartYear] = useState<number>(savedState.startYear ?? now.getFullYear());
+
+  const defaultTarget = useMemo(() => {
+    const d = new Date(now.getFullYear(), now.getMonth() + 2, 1);
+    return { month: d.getMonth(), year: d.getFullYear() };
+  }, [now]);
+
+  const [targetMonth, setTargetMonth] = useState<number>(savedState.targetMonth ?? defaultTarget.month);
+  const [targetYear, setTargetYear] = useState<number>(savedState.targetYear ?? defaultTarget.year);
+  const [projectionLength, setProjectionLength] = useState<number>(12);
 
   // Selected Account
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(savedConfig?.selected_account_id || 'all');
@@ -77,12 +89,21 @@ export default function SimulatorManager({
   const [aiRecommendation, setAiRecommendation] = useState<string>('');
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
 
+  // Computed offset for backward compatibility
+  const targetMonthOffset = useMemo(() => {
+    return Math.max(0, (targetYear - startYear) * 12 + (targetMonth - startMonth));
+  }, [startYear, startMonth, targetYear, targetMonth]);
+
   // Auto Save Effect
   useEffect(() => {
     const timeout = setTimeout(() => {
       const currentState = {
         dreamName,
         dreamCost,
+        startMonth,
+        startYear,
+        targetMonth,
+        targetYear,
         targetMonthOffset,
         startBalance,
         incomes,
@@ -93,7 +114,7 @@ export default function SimulatorManager({
     }, 1500);
 
     return () => clearTimeout(timeout);
-  }, [dreamName, dreamCost, targetMonthOffset, startBalance, incomes, expenses, oneOffs, selectedAccountId, profile]);
+  }, [dreamName, dreamCost, startMonth, startYear, targetMonth, targetYear, targetMonthOffset, startBalance, incomes, expenses, oneOffs, selectedAccountId, profile]);
 
   // Input states for adding new list items
   const [newIncName, setNewIncName] = useState('');
@@ -154,42 +175,30 @@ export default function SimulatorManager({
     const initialRest = currentBal - totalOneOffs;
     currentBal = initialRest;
 
-    // Proyeksi 6 bulan ke depan
-    for (let i = 0; i < 6; i++) {
-      const projDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 25);
-      const isTargetMonth = i === targetMonthOffset;
+    // Proyeksi berdasarkan panjang durasi pilihan (minimal hingga bulan target)
+    const totalProjectionMonths = Math.max(projectionLength, targetMonthOffset + 1);
+    for (let i = 0; i < totalProjectionMonths; i++) {
+      const projDate = new Date(startYear, startMonth + i, 25);
+      const isTargetMonth = (projDate.getFullYear() === targetYear && projDate.getMonth() === targetMonth);
 
       const monthlyIncome = totalInflow;
-      const monthlyExpense = totalOutflow;
+      const regularExpense = totalOutflow;
+      const targetCost = isTargetMonth ? dreamAmt : 0;
+      const totalExpense = regularExpense + targetCost;
 
-      // 1. Kas sebelum gajian bulan ini (saldo bawaan dari bulan sebelumnya)
-      const balanceBeforeSalary = currentBal;
-      
-      // 2. Terima gajian di tanggal 25 (Puncak Saldo)
-      const balanceAfterSalary = balanceBeforeSalary + monthlyIncome;
+      const startBalance = currentBal;
+      const finalBalance = startBalance + monthlyIncome - totalExpense;
 
-      // 3. Eksekusi pembelian jika bulan target
-      let balanceAfterPurchase = balanceAfterSalary;
-      let purchaseOccurred = false;
-
-      if (isTargetMonth) {
-        balanceAfterPurchase = balanceAfterSalary - dreamAmt;
-        purchaseOccurred = true;
-      }
-
-      // 4. Saldo Akhir Bulan (setelah dikurangi biaya hidup sebulan penuh)
-      const finalBalance = balanceAfterPurchase - monthlyExpense;
-
-      // Status deteksi didasarkan pada sisa kas akhir bulan (titik terendah likuiditas sebelum gajian berikutnya)
+      // Status deteksi didasarkan pada sisa kas akhir bulan
       let status: 'SAFE' | 'WARNING' | 'CRITICAL' | 'DANGER' = 'SAFE';
       let statusText = 'Aman & Sehat';
 
       if (finalBalance < 0) {
         status = 'DANGER';
-        statusText = '🚨 Minus Sebelum Gajian!';
+        statusText = '🚨 Defisit / Minus!';
       } else if (finalBalance < 200000) {
         status = 'CRITICAL';
-        statusText = '⚠️ Saldo Kritis Sebelum Gajian';
+        statusText = '⚠️ Saldo Sangat Kritis';
       } else if (finalBalance < 1000000) {
         status = 'WARNING';
         statusText = 'Keleluasaan Kas Rendah';
@@ -197,17 +206,24 @@ export default function SimulatorManager({
 
       monthsTimeline.push({
         monthName: `${MONTH_LABELS[projDate.getMonth()]} ${projDate.getFullYear()}`,
-        startBalance: balanceBeforeSalary,
-        netSurplus: netMonthlySurplus,
-        balanceBeforeSalary, // Kas sebelum gajian
-        balanceAfterSalary,  // Kas setelah gajian
-        balanceAfterPurchase: finalBalance, // Saldo Akhir Bulan di-map ke key ini agar UI tidak error
-        purchaseOccurred,
+        monthNum: projDate.getMonth(),
+        yearNum: projDate.getFullYear(),
+        startBalance,
+        monthlyIncome,
+        regularExpense,
+        targetCost,
+        totalExpense,
+        finalBalance,
+        purchaseOccurred: isTargetMonth,
         status,
         statusText,
-        finalBalance // Disimpan juga secara eksplisit untuk logic recommendation
+        // Compatibility fields:
+        netSurplus: monthlyIncome - regularExpense,
+        balanceBeforeSalary: startBalance,
+        balanceAfterSalary: startBalance + monthlyIncome,
+        balanceAfterPurchase: finalBalance,
       });
-      
+
       // Saldo akhir bulan ini menjadi saldo awal bulan depan
       currentBal = finalBalance;
     }
@@ -245,6 +261,10 @@ export default function SimulatorManager({
             dreamName: dreamName || 'Aset Impian',
             dreamCost: parseFormattedNumber(dreamCost),
             targetMonthOffset,
+            startMonth,
+            startYear,
+            targetMonth,
+            targetYear,
             incomes,
             expenses,
             oneOffs,
@@ -264,7 +284,7 @@ export default function SimulatorManager({
     }, 1000);
 
     return () => clearTimeout(delayDebounce);
-  }, [startBalance, dreamCost, dreamName, targetMonthOffset, incomes, expenses, oneOffs, roadmapProjection.monthsTimeline]);
+  }, [roadmapProjection, dreamName, dreamCost]);
 
   return (
     <div className="space-y-6">
@@ -292,33 +312,100 @@ export default function SimulatorManager({
               Parameter Simulasi HP / Target Impian
             </h3>
 
-            {/* Target Barang */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-slate-500">Nama Impian</Label>
-                <Input
-                  type="text"
-                  value={dreamName}
-                  onChange={(e) => setDreamName(e.target.value)}
-                  className="text-xs"
-                />
+            {/* Target Impian Name */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-slate-500">Nama Impian</Label>
+              <Input
+                type="text"
+                value={dreamName}
+                onChange={(e) => setDreamName(e.target.value)}
+                className="text-xs"
+              />
+            </div>
+
+            {/* Config 1: Mulai Proyeksi Timeline */}
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              <Label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                <span>📌 Mulai Proyeksi Timeline</span>
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-400 font-semibold">Bulan Mulai</span>
+                  <Select value={String(startMonth)} onValueChange={(val) => setStartMonth(parseInt(val || '0'))}>
+                    <SelectTrigger className="border-[#e2e8f0] text-xs font-medium">
+                      <SelectValue>{MONTH_LABELS[startMonth]}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border border-[#e2e8f0] max-h-60 overflow-y-auto">
+                      {MONTH_LABELS.map((mName, mIdx) => (
+                        <SelectItem key={mIdx} value={String(mIdx)} className="text-xs">
+                          {mName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-400 font-semibold">Tahun Mulai</span>
+                  <Select value={String(startYear)} onValueChange={(val) => setStartYear(parseInt(val || String(now.getFullYear())))}>
+                    <SelectTrigger className="border-[#e2e8f0] text-xs font-medium font-mono">
+                      <SelectValue>{startYear}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border border-[#e2e8f0] max-h-60 overflow-y-auto">
+                      {Array.from({ length: 20 }).map((_, yIdx) => {
+                        const yr = now.getFullYear() - 1 + yIdx;
+                        return (
+                          <SelectItem key={yr} value={String(yr)} className="text-xs font-mono">
+                            {yr}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-slate-500">Bulan Target Eksekusi</Label>
-                <Select value={String(targetMonthOffset)} onValueChange={(v) => setTargetMonthOffset(parseInt(v || '0'))}>
-                  <SelectTrigger className="border-[#e2e8f0] text-xs">
-                    <SelectValue>
-                      {targetMonthOffset === 0 ? 'Bulan ke-1' : targetMonthOffset === 1 ? 'Bulan ke-2' : targetMonthOffset === 2 ? 'Bulan ke-3' : `Bulan ke-${targetMonthOffset + 1}`}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border border-[#e2e8f0]">
-                    <SelectItem value="0" className="text-xs">Bulan Depan (1 bln)</SelectItem>
-                    <SelectItem value="1" className="text-xs">2 Bulan lagi</SelectItem>
-                    <SelectItem value="2" className="text-xs">3 Bulan lagi (Agustus)</SelectItem>
-                    <SelectItem value="3" className="text-xs">4 Bulan lagi</SelectItem>
-                    <SelectItem value="4" className="text-xs">5 Bulan lagi</SelectItem>
-                  </SelectContent>
-                </Select>
+            </div>
+
+            {/* Config 2: Target Eksekusi Pembelian */}
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              <Label className="text-xs font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1">
+                <span>🎯 Target Eksekusi Pembelian</span>
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-400 font-semibold">Bulan Target</span>
+                  <Select value={String(targetMonth)} onValueChange={(val) => setTargetMonth(parseInt(val || '0'))}>
+                    <SelectTrigger className="border-[#e2e8f0] text-xs font-medium border-blue-200">
+                      <SelectValue>{MONTH_LABELS[targetMonth]}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border border-[#e2e8f0] max-h-60 overflow-y-auto">
+                      {MONTH_LABELS.map((mName, mIdx) => (
+                        <SelectItem key={mIdx} value={String(mIdx)} className="text-xs">
+                          {mName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-400 font-semibold">Tahun Target</span>
+                  <Select value={String(targetYear)} onValueChange={(val) => setTargetYear(parseInt(val || String(now.getFullYear())))}>
+                    <SelectTrigger className="border-[#e2e8f0] text-xs font-medium border-blue-200 font-mono">
+                      <SelectValue>{targetYear}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border border-[#e2e8f0] max-h-60 overflow-y-auto">
+                      {Array.from({ length: 20 }).map((_, yIdx) => {
+                        const yr = now.getFullYear() - 1 + yIdx;
+                        return (
+                          <SelectItem key={yr} value={String(yr)} className="text-xs font-mono">
+                            {yr}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
@@ -490,8 +577,28 @@ export default function SimulatorManager({
 
           {/* Projections Roadmap Timeline */}
           <div className="space-y-4">
-            <h4 className="text-xs font-bold text-black uppercase tracking-wider">Proyeksi Aliran Kas Bulanan &amp; Timeline</h4>
-            <div className="relative border-l-2 border-slate-200 ml-4 pl-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
+              <div>
+                <h4 className="text-xs font-bold text-black uppercase tracking-wider">Proyeksi Aliran Kas Bulanan &amp; Timeline</h4>
+                <p className="text-[10px] text-slate-400">Klik tombol pada kartu bulan untuk memindahkan target eksekusi secara instan.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-slate-500 shrink-0">Panjang Timeline:</span>
+                <Select value={String(projectionLength)} onValueChange={(val) => setProjectionLength(parseInt(val || '12'))}>
+                  <SelectTrigger className="border-[#e2e8f0] text-xs h-8 bg-white w-32">
+                    <SelectValue>{projectionLength} Bulan</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border border-[#e2e8f0]">
+                    <SelectItem value="6" className="text-xs">6 Bulan</SelectItem>
+                    <SelectItem value="12" className="text-xs">12 Bulan (1 Thn)</SelectItem>
+                    <SelectItem value="18" className="text-xs">18 Bulan</SelectItem>
+                    <SelectItem value="24" className="text-xs">24 Bulan (2 Thn)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="relative border-l-2 border-slate-200 ml-4 pl-6 space-y-6 pt-2">
               {roadmapProjection.monthsTimeline.map((item, idx) => {
                 const isTarget = item.purchaseOccurred;
                 const isCritical = item.status === 'CRITICAL' || item.status === 'DANGER';
@@ -501,19 +608,26 @@ export default function SimulatorManager({
                     {/* Timeline dot */}
                     <span className={`absolute -left-[31px] top-1 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center
                       ${isTarget 
-                        ? 'bg-blue-600 scale-125 shadow' 
+                        ? 'bg-blue-600 scale-125 shadow ring-4 ring-blue-100' 
                         : isCritical 
                           ? 'bg-[#ba1a1a]' 
                           : 'bg-[#009668]'}`}>
                     </span>
 
-                    <div className="bg-white border border-[#e2e8f0] rounded-xl p-5 space-y-3 shadow-sm hover:shadow-md transition-shadow">
+                    <div className={`bg-white border rounded-xl p-5 space-y-3 shadow-sm hover:shadow-md transition-all ${isTarget ? 'border-blue-300 ring-2 ring-blue-50' : 'border-[#e2e8f0]'}`}>
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
                         <div>
-                          <span className="text-[10px] font-bold text-slate-400 font-mono">Bulan Proyeksi</span>
-                          <h5 className="text-sm font-bold text-black">{item.monthName}</h5>
+                          <span className="text-[10px] font-bold text-slate-400 font-mono">Bulan Proyeksi ke-{idx + 1}</span>
+                          <h5 className="text-sm font-bold text-black flex items-center gap-2">
+                            <span>{item.monthName}</span>
+                            {isTarget && (
+                              <span className="text-[10px] bg-blue-600 text-white font-bold px-2 py-0.5 rounded-full">
+                                TARGET EKSEKUSI
+                              </span>
+                            )}
+                          </h5>
                         </div>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold self-start sm:self-auto
                           ${item.status === 'SAFE' 
                             ? 'bg-emerald-50 text-[#009668]' 
                             : item.status === 'WARNING' 
@@ -525,30 +639,46 @@ export default function SimulatorManager({
 
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
                         <div>
-                          <span className="text-[10px] text-slate-400 block mb-0.5">Saldo Masuk</span>
-                          <span className="font-bold text-[#009668] font-mono">+{formatRupiah(item.netSurplus)}</span>
+                          <span className="text-[10px] text-slate-400 block mb-0.5">Saldo Awal Bulan</span>
+                          <span className="font-bold text-slate-800 font-mono">{formatRupiah(item.startBalance)}</span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 block mb-0.5">Kas sebelum Gajian</span>
-                          <span className="font-bold text-slate-800 font-mono">{formatRupiah(item.balanceBeforeSalary)}</span>
+                          <span className="text-[10px] text-slate-400 block mb-0.5">Pemasukan</span>
+                          <span className="font-bold text-[#009668] font-mono">+{formatRupiah(item.monthlyIncome)}</span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 block mb-0.5">Kas setelah Gajian</span>
-                          <span className="font-bold text-slate-800 font-mono">{formatRupiah(item.balanceAfterSalary)}</span>
+                          <span className="text-[10px] text-slate-400 block mb-0.5">Total Pengeluaran</span>
+                          <span className="font-bold text-[#ba1a1a] font-mono">-{formatRupiah(item.totalExpense)}</span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 block mb-0.5">Saldo Akhir</span>
-                          <span className="font-bold text-blue-600 font-mono">{formatRupiah(item.balanceAfterPurchase)}</span>
+                          <span className="text-[10px] text-slate-400 block mb-0.5">Saldo Akhir Bulan</span>
+                          <span className={`font-bold font-mono ${item.finalBalance >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                            {formatRupiah(item.finalBalance)}
+                          </span>
                         </div>
                       </div>
 
-                      {isTarget && (
-                        <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2 text-blue-800">
+                      {isTarget ? (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
+                          <div className="flex items-center gap-2 text-blue-900 font-medium">
                             <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-600" />
                             <span>Eksekusi Belanja Target: <strong>{dreamName}</strong></span>
                           </div>
                           <span className="font-mono font-bold text-blue-700">- {formatRupiah(parseFormattedNumber(dreamCost))}</span>
+                        </div>
+                      ) : (
+                        <div className="flex justify-end pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTargetMonth(item.monthNum);
+                              setTargetYear(item.yearNum);
+                            }}
+                            className="text-[11px] font-semibold text-slate-600 hover:text-blue-600 hover:bg-blue-50 px-3 py-1 rounded-lg border border-slate-200 hover:border-blue-200 transition-all flex items-center gap-1.5 active:scale-95 shadow-2xs"
+                          >
+                            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                            <span>Pindahkan Eksekusi Ke {item.monthName}</span>
+                          </button>
                         </div>
                       )}
                     </div>

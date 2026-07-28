@@ -38,6 +38,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 export interface Account {
   id: string;
   name: string;
+  is_active?: boolean;
 }
 
 export interface Category {
