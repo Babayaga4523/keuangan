@@ -992,6 +992,28 @@ Rekomendasi: ${totalBalance >= 15000000 + emergencyFundTarget ? 'Go ahead, kondi
 
     console.log(`[AI Router] Mode: ${selectedMode} | Model Target: ${primaryModel}`);
 
+    // Forward to n8n Webhook if configured
+    const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
+    if (n8nWebhookUrl) {
+      try {
+        const imageUrl = hasAttachments ? lastUserMessage?.experimental_attachments[0]?.url : undefined;
+        fetch(n8nWebhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_type: (hasAttachments || isMultimodal) ? 'RECEIPT_OCR' : isHeavyAnalysis ? 'HEAVY_ANALYSIS' : 'GENERAL',
+            chatInput: lastMsgContent,
+            image_url: imageUrl,
+            messages: recentMessages,
+            profile,
+            timestamp: new Date().toISOString()
+          })
+        }).catch(err => console.error('[n8n Webhook Forward Error]:', err));
+      } catch (e) {
+        // Ignore webhook dispatch errors
+      }
+    }
+
     let result;
     try {
       result = await streamText({

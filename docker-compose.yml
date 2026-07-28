@@ -45,6 +45,8 @@ services:
       - NODE_ENV=production
       - WEBHOOK_URL=http://localhost:5678/
       - GENERIC_TIMEZONE=Asia/Jakarta
+      - OPENAI_API_KEY=${GITHUB_PAT}
+      - OPENAI_API_BASE=https://models.inference.ai.azure.com
     volumes:
       - n8n_data:/home/node/.n8n
 
