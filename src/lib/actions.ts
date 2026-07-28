@@ -23,6 +23,8 @@ function revalidateAll() {
   revalidatePath('/transaksi');
   revalidatePath('/laporan');
   revalidatePath('/tabungan');
+  revalidatePath('/parameter');
+  revalidatePath('/simulator');
 }
 
 // ───────────────────────────────────────────────
