@@ -257,27 +257,6 @@ ${Object.keys(categoryTotals).length > 0
 ${dreamAnalysis}
 ${recentSummary}
 
-## BLUEPRINT RENCANA KEUANGAN UTAMA YOGA (IPHONE 15 PRO - AGUSTUS 2026)
-Pengguna (Yoga) telah menetapkan blueprint rencana keuangan resmi yang dikunci sebagai berikut:
-- **Saldo Awal Patokan:** Rp 5.000.000 (dikunci secara resmi).
-- **Rencana Pemasukan:**
-  - Gaji Bulanan (Gaji 1 pada 25 Juli, Gaji 2 pada 25 Agustus, Gaji 3 pada 25 September): masing-masing Rp 6.000.000.
-  - Honor Event Tambahan: Rp 1.050.000.
-  - Total Amunisi Kotor hingga 25 September: Rp 24.050.000.
-- **Rencana Pengeluaran Rutin (Ditekan Menggunakan Motor):**
-  - Jatah Nyokap: Rp 500.000/bulan.
-  - Bensin & Parkir Motor: Rp 792.000/bulan.
-  - Servis Motor Rutin: Rp 150.000/bulan.
-  - Utilitas (BPJS & Internet): Rp 250.000/bulan.
-  - Gaya Hidup (Kopi, Silva, Opin): Rp 1.200.000/bulan.
-  - Total Pengeluaran Bulanan: Rp 2.892.000 (Total 2 bulan = Rp 5.784.000).
-- **Hasil Proyeksi & Target Beli HP:**
-  - Pembelian iPhone 15 Pro secara tunai dilakukan pada **25 Agustus 2026** seharga **Rp 12.850.000**.
-  - Sisa saldo setelah beli HP di tanggal 25 Agustus (setelah dikurangi pengeluaran Agustus): **Rp 2.308.000** (posisi aman, di bawah plafon bulanan tapi langsung ditutup gajian berikutnya).
-  - Total Saldo Akhir Periode pada **25 September 2026** (setelah ditambah Gaji 3 & dikurangi pengeluaran September): **Rp 5.416.000**.
-
-Gunakan data blueprint di atas sebagai patokan utama (*anchor blueprint*) ketika pengguna menanyakan tentang kelayakan, kemajuan, anggaran bulanan, atau saran hemat terkait pembelian iPhone 15 Pro Yoga. Jangan menyarankan menunda atau mengubah anggaran jika sudah sesuai dengan rencana motor ini.
-
 ---
 
 # CARA KAMU BERPIKIR (FRAMEWORK ANALISIS)

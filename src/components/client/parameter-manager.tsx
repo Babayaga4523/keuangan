@@ -55,27 +55,31 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Helper untuk format angka dari DB ke string dengan titik ribuan
+  const fmtNum = (n: number | null | undefined, def: string) =>
+    n != null ? n.toLocaleString('id-ID') : def;
+
   // Form states initialized from props or default zeros
-  const [salary, setSalary] = useState(initialParameters?.monthlySalary ? initialParameters.monthlySalary.toString() : '6000000');
-  const [savingsGoal, setSavingsGoal] = useState(initialParameters?.monthlySavingsGoal ? initialParameters.monthlySavingsGoal.toString() : '1500000');
+  const [salary, setSalary] = useState(fmtNum(initialParameters?.monthlySalary, '6.000.000'));
+  const [savingsGoal, setSavingsGoal] = useState(fmtNum(initialParameters?.monthlySavingsGoal, '1.500.000'));
 
   // Account designations
   const [operatingAccountId, setOperatingAccountId] = useState(initialParameters?.operatingAccountId || '');
   const [savingsAccountId, setSavingsAccountId] = useState(initialParameters?.savingsAccountId || '');
 
   // Expense breakdowns
-  const [parentAllowance, setParentAllowance] = useState(initialParameters?.expenses?.parentAllowance ? initialParameters.expenses.parentAllowance.toString() : '1000000');
-  const [motorService, setMotorService] = useState(initialParameters?.expenses?.motorService ? initialParameters.expenses.motorService.toString() : '150000');
-  const [motorFuel, setMotorFuel] = useState(initialParameters?.expenses?.motorFuel ? initialParameters.expenses.motorFuel.toString() : '200000');
-  const [bpjsHealth, setBpjsHealth] = useState(initialParameters?.expenses?.bpjsHealth ? initialParameters.expenses.bpjsHealth.toString() : '150000');
-  const [internetBill, setInternetBill] = useState(initialParameters?.expenses?.internetBill ? initialParameters.expenses.internetBill.toString() : '250000');
-  const [pocketMoney, setPocketMoney] = useState(initialParameters?.expenses?.pocketMoney ? initialParameters.expenses.pocketMoney.toString() : '1500000');
-  const [otherExpenses, setOtherExpenses] = useState(initialParameters?.expenses?.otherExpenses ? initialParameters.expenses.otherExpenses.toString() : '300000');
+  const [parentAllowance, setParentAllowance] = useState(fmtNum(initialParameters?.expenses?.parentAllowance, '1.000.000'));
+  const [motorService, setMotorService] = useState(fmtNum(initialParameters?.expenses?.motorService, '150.000'));
+  const [motorFuel, setMotorFuel] = useState(fmtNum(initialParameters?.expenses?.motorFuel, '200.000'));
+  const [bpjsHealth, setBpjsHealth] = useState(fmtNum(initialParameters?.expenses?.bpjsHealth, '150.000'));
+  const [internetBill, setInternetBill] = useState(fmtNum(initialParameters?.expenses?.internetBill, '250.000'));
+  const [pocketMoney, setPocketMoney] = useState(fmtNum(initialParameters?.expenses?.pocketMoney, '1.500.000'));
+  const [otherExpenses, setOtherExpenses] = useState(fmtNum(initialParameters?.expenses?.otherExpenses, '300.000'));
 
   // Dynamic Custom Expenses State
   const [customExpenses, setCustomExpenses] = useState<Array<{ id: string; name: string; amount: string }>>(
     initialParameters?.expenses?.customExpenses && initialParameters.expenses.customExpenses.length > 0
-      ? initialParameters.expenses.customExpenses.map(c => ({ id: c.id || Math.random().toString(), name: c.name, amount: c.amount.toString() }))
+      ? initialParameters.expenses.customExpenses.map(c => ({ id: c.id || Math.random().toString(), name: c.name, amount: c.amount != null ? c.amount.toLocaleString('id-ID') : '' }))
       : []
   );
 
@@ -88,7 +92,22 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
   };
 
   const handleCustomExpenseChange = (id: string, field: 'name' | 'amount', value: string) => {
-    setCustomExpenses(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+    if (field === 'amount') {
+      setCustomExpenses(prev => prev.map(item => item.id === id ? { ...item, amount: formatInputNumber(value) } : item));
+    } else {
+      setCustomExpenses(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+    }
+  };
+
+  // Format angka dengan titik sebagai pemisah ribuan saat mengetik
+  const formatInputNumber = (val: string): string => {
+    const digits = val.replace(/\D/g, '');
+    if (!digits) return '';
+    return parseInt(digits, 10).toLocaleString('id-ID');
+  };
+
+  const handleNumberInput = (setter: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setter(formatInputNumber(e.target.value));
   };
 
   // Calculations
@@ -302,7 +321,7 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
                   type="text"
                   placeholder="0"
                   value={salary}
-                  onChange={(e) => setSalary(e.target.value)}
+                  onChange={handleNumberInput(setSalary)}
                   className="pl-9 border-[#e2e8f0] rounded-lg font-mono font-semibold h-10 text-sm"
                   required
                 />
@@ -318,7 +337,7 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
                   type="text"
                   placeholder="0"
                   value={savingsGoal}
-                  onChange={(e) => setSavingsGoal(e.target.value)}
+                  onChange={handleNumberInput(setSavingsGoal)}
                   className="pl-9 border-[#e2e8f0] rounded-lg font-mono font-semibold h-10 text-sm"
                   required
                 />
@@ -348,7 +367,7 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
                   type="text"
                   placeholder="0"
                   value={parentAllowance}
-                  onChange={(e) => setParentAllowance(e.target.value)}
+                  onChange={handleNumberInput(setParentAllowance)}
                   className="pl-9 border-[#e2e8f0] rounded-lg font-mono text-sm"
                 />
               </div>
@@ -366,7 +385,7 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
                   type="text"
                   placeholder="0"
                   value={motorService}
-                  onChange={(e) => setMotorService(e.target.value)}
+                  onChange={handleNumberInput(setMotorService)}
                   className="pl-9 border-[#e2e8f0] rounded-lg font-mono text-sm"
                 />
               </div>
@@ -384,7 +403,7 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
                   type="text"
                   placeholder="0"
                   value={motorFuel}
-                  onChange={(e) => setMotorFuel(e.target.value)}
+                  onChange={handleNumberInput(setMotorFuel)}
                   className="pl-9 border-[#e2e8f0] rounded-lg font-mono text-sm"
                 />
               </div>
@@ -402,7 +421,7 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
                   type="text"
                   placeholder="0"
                   value={bpjsHealth}
-                  onChange={(e) => setBpjsHealth(e.target.value)}
+                  onChange={handleNumberInput(setBpjsHealth)}
                   className="pl-9 border-[#e2e8f0] rounded-lg font-mono text-sm"
                 />
               </div>
@@ -420,7 +439,7 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
                   type="text"
                   placeholder="0"
                   value={internetBill}
-                  onChange={(e) => setInternetBill(e.target.value)}
+                  onChange={handleNumberInput(setInternetBill)}
                   className="pl-9 border-[#e2e8f0] rounded-lg font-mono text-sm"
                 />
               </div>
@@ -438,7 +457,7 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
                   type="text"
                   placeholder="0"
                   value={pocketMoney}
-                  onChange={(e) => setPocketMoney(e.target.value)}
+                  onChange={handleNumberInput(setPocketMoney)}
                   className="pl-9 border-[#e2e8f0] rounded-lg font-mono text-sm"
                 />
               </div>
@@ -456,7 +475,7 @@ export default function ParameterManager({ initialParameters, accounts = [], pro
                   type="text"
                   placeholder="0"
                   value={otherExpenses}
-                  onChange={(e) => setOtherExpenses(e.target.value)}
+                  onChange={handleNumberInput(setOtherExpenses)}
                   className="pl-9 border-[#e2e8f0] rounded-lg font-mono text-sm"
                 />
               </div>
