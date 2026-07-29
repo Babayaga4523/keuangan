@@ -23,6 +23,8 @@ export default async function TransaksiPage() {
         type,
         transaction_date,
         description,
+        receipt_url,
+        tags,
         accounts:accounts!transactions_account_id_fkey (id, name),
         categories (id, name),
         destination_account:destination_account_id (id, name)
