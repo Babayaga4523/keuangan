@@ -62,10 +62,14 @@ export async function actionCreateTransaction(data: {
   if (error) return { success: false, error: error.message };
 
   if (receiptUrl || tags) {
-    await supabase
+    const { error: updateError } = await supabase
       .from('transactions')
       .update({ receipt_url: receiptUrl || null, tags: tags || null })
       .eq('id', txId);
+      
+    if (updateError) {
+      console.error('Failed to save receipt/tags:', updateError);
+    }
   }
 
   revalidateAll();
