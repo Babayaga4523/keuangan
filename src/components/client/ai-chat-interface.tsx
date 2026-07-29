@@ -21,7 +21,7 @@ const SUGGESTIONS = [
   { title: '💡 Saran Hemat Pengeluaran', desc: 'Dapatkan tips hemat konkret berdasarkan transaksi terakhir.', prompt: 'Berikan tips hemat berdasarkan pengeluaran saya.' }
 ];
 
-const compressImageBase64 = (base64Str: string, maxWidth = 1600, maxHeight = 1600, quality = 0.75): Promise<string> => {
+const compressImageBase64 = (base64Str: string, maxWidth = 800, maxHeight = 800, quality = 0.6): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
     img.src = base64Str;
