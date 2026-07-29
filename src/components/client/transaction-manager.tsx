@@ -309,20 +309,21 @@ export default function TransactionManager({
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-[#f2f4f6] text-[#45464d] font-bold uppercase tracking-wider border-b border-[#e2e8f0]">
+                <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase tracking-wider border-b border-[#e2e8f0]">
                   <tr>
-                    <th className="px-6 py-3.5 font-bold">Tanggal</th>
-                    <th className="px-6 py-3.5 font-bold">Deskripsi</th>
-                    <th className="px-6 py-3.5 font-bold hidden md:table-cell">Kategori</th>
-                    <th className="px-6 py-3.5 font-bold hidden md:table-cell">Akun</th>
-                    <th className="px-6 py-3.5 font-bold text-right">Jumlah</th>
-                    <th className="px-6 py-3.5 w-[90px]"></th>
+                    <th className="px-5 py-3.5 font-bold">Tanggal</th>
+                    <th className="px-5 py-3.5 font-bold">Deskripsi & Tag</th>
+                    <th className="px-5 py-3.5 font-bold text-center">Struk / Foto</th>
+                    <th className="px-5 py-3.5 font-bold hidden md:table-cell">Kategori</th>
+                    <th className="px-5 py-3.5 font-bold hidden md:table-cell">Akun</th>
+                    <th className="px-5 py-3.5 font-bold text-right">Jumlah</th>
+                    <th className="px-5 py-3.5 w-[90px] text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e2e8f0] font-medium text-slate-800">
                   {filteredTransactions.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center text-[#45464d] py-12 italic">
+                      <td colSpan={7} className="text-center text-[#45464d] py-12 italic">
                         Belum ada riwayat transaksi yang cocok dengan kriteria filter.
                       </td>
                     </tr>
@@ -348,24 +349,26 @@ export default function TransactionManager({
                       }
 
                       return (
-                        <tr key={tx.id} className="hover:bg-[#f2f4f6]/30 transition-colors">
-                          <td className="px-6 py-4 text-[#45464d] whitespace-nowrap font-mono">
+                        <tr key={tx.id} className="hover:bg-[#f8fafc] transition-colors">
+                          <td className="px-5 py-3.5 text-[#45464d] whitespace-nowrap font-mono text-[11px]">
                             {formatDate(tx.transaction_date)}
                           </td>
-                          <td className="px-6 py-4 font-bold text-black max-w-[240px]">
+                          <td className="px-5 py-3.5 font-bold text-black max-w-[260px]">
                             <div className="flex items-center gap-1.5">
                               <span className="truncate">{tx.description || <span className="text-slate-400 font-normal italic">Tanpa deskripsi</span>}</span>
-                              {tx.receipt_url && (
-                                <button 
-                                  onClick={() => setActiveReceiptUrl(tx.receipt_url || null)} 
-                                  className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-black shrink-0 transition-all"
-                                  title="Lihat struk belanja"
-                                >
-                                  <Paperclip className="h-3 w-3" />
-                                </button>
-                              )}
                             </div>
                             
+                            {/* Tags list */}
+                            {tx.tags && (
+                              <div className="flex flex-wrap gap-1 mt-1 font-normal">
+                                {tx.tags.split(',').map((tag, idx) => (
+                                  <span key={idx} className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] rounded-md font-semibold font-mono shadow-2xs">
+                                    #{tag.trim()}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
                             {/* Mobile only badges for Category and Account */}
                             <div className="flex flex-wrap items-center gap-1.5 mt-1.5 md:hidden">
                               {tx.categories?.name && (
@@ -377,29 +380,36 @@ export default function TransactionManager({
                                 {tx.type === 'TRANSFER' && tx.destination_account 
                                   ? `${tx.accounts?.name} → ${tx.destination_account.name}` 
                                   : tx.accounts?.name}
-                              </span>
+                               </span>
                             </div>
+                          </td>
 
-                            {tx.tags && (
-                              <div className="flex flex-wrap gap-1 mt-1 font-normal">
-                                {tx.tags.split(',').map((tag, idx) => (
-                                  <span key={idx} className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[9px] rounded font-semibold font-mono">
-                                    #{tag.trim()}
-                                  </span>
-                                ))}
-                              </div>
+                          {/* Dedicated Receipt / Photo Column */}
+                          <td className="px-5 py-3.5 text-center">
+                            {tx.receipt_url ? (
+                              <button 
+                                onClick={() => setActiveReceiptUrl(tx.receipt_url || null)} 
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 hover:bg-black hover:text-white text-slate-700 rounded-lg text-[11px] font-semibold transition-all border border-slate-200 shadow-2xs group"
+                                title="Klik untuk memperbesar foto struk"
+                              >
+                                <Paperclip className="h-3.5 w-3.5 text-slate-500 group-hover:text-white" />
+                                <span>Lihat Struk</span>
+                              </button>
+                            ) : (
+                              <span className="text-slate-300 font-mono">-</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 hidden md:table-cell">
+
+                          <td className="px-5 py-3.5 hidden md:table-cell">
                             {tx.categories?.name ? (
-                              <span className="px-2 py-0.5 bg-[#f2f4f6] text-[#45464d] text-[10px] font-bold rounded uppercase">
+                              <span className="px-2.5 py-1 bg-[#f1f5f9] text-slate-700 border border-slate-200/60 text-[10px] font-bold rounded-md uppercase tracking-wider">
                                 {tx.categories.name}
                               </span>
                             ) : (
                               <span className="text-slate-400">-</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 text-[#45464d] hidden md:table-cell">
+                          <td className="px-5 py-3.5 text-[#45464d] hidden md:table-cell">
                             {tx.type === 'TRANSFER' && tx.destination_account ? (
                               <div className="flex items-center space-x-1 font-semibold text-slate-700">
                                 <span>{tx.accounts?.name}</span>
@@ -410,14 +420,14 @@ export default function TransactionManager({
                               <span className="font-semibold text-slate-700">{tx.accounts?.name}</span>
                             )}
                           </td>
-                          <td className={`px-6 py-4 text-right font-bold font-mono ${amountColor}`}>
+                          <td className={`px-5 py-3.5 text-right font-bold font-mono ${amountColor}`}>
                             <div className="flex items-center justify-end">
                               {typeIcon}
                               {amountPrefix}
                               {formatRupiah(amountValue)}
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-right">
+                          <td className="px-5 py-3.5 text-right">
                             <div className="flex items-center justify-end gap-1">
                               {tx.type !== 'TRANSFER' && (
                                 <Button
