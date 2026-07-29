@@ -423,11 +423,37 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
       if (imageParts.length > 0) {
         try {
           console.time('Vision Pre-scan');
+          
+          const ocrPrompt = `Kamu adalah mesin OCR struk belanja yang sangat teliti. Tugas kamu adalah membaca SEMUA teks pada gambar ini secara PERSIS seperti yang tertulis.
+
+INSTRUKSI:
+1. Baca gambar ini karakter demi karakter dengan sangat hati-hati
+2. Perhatikan perbedaan angka 0 vs huruf O, angka 1 vs huruf l/I
+3. Baca angka harga dari KANAN ke KIRI untuk menghindari kesalahan digit
+4. Jika ada teks yang buram, tulis [tidak terbaca] bukan mengarang
+
+FORMAT OUTPUT (jika ini struk/nota belanja):
+TOKO: [nama toko persis seperti tertulis]
+ALAMAT: [alamat jika ada]
+TANGGAL: [tanggal dan jam persis dari struk, format DD/MM/YYYY HH:MM jika tersedia]
+KASIR: [nama kasir jika ada]
+
+DAFTAR ITEM:
+1. [nama item persis] - Qty: [jumlah] x Rp [harga satuan] = Rp [subtotal]
+2. [item berikutnya...]
+
+SUBTOTAL: Rp [angka]
+DISKON: Rp [angka, jika ada]
+PAJAK/PPN: Rp [angka, jika ada]
+TOTAL: Rp [angka TOTAL AKHIR yang dibayar]
+PEMBAYARAN: [tunai/debit/kredit/e-wallet + nama bank/provider jika tertera]
+KEMBALIAN: Rp [angka, jika ada]
+
+Jika gambar ini BUKAN struk/nota belanja, jelaskan apa yang kamu lihat dengan singkat.
+JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
+
           const visionPromptParts: any[] = [
-            {
-              type: 'text',
-              text: 'Kamu adalah asisten OCR struk belanja. Jelaskan gambar ini dengan DETAIL. Jika ini struk belanja/nota, sebutkan: nama toko/merchant, tanggal transaksi, daftar item beserta harga masing-masing, total pembayaran, dan metode pembayaran (jika terlihat). Jika bukan struk, jelaskan apa yang kamu lihat. Jawab dalam Bahasa Indonesia. JANGAN gunakan format LaTeX.'
-            },
+            { type: 'text', text: ocrPrompt },
             ...imageParts
           ];
 
@@ -439,12 +465,13 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
                 content: visionPromptParts
               }
             ],
-            temperature: 0.1,
-            maxTokens: 1500
+            temperature: 0.05,
+            maxTokens: 2000
           });
           visionDescription = visionResult.text || '';
           console.timeEnd('Vision Pre-scan');
           console.log('[Vision Pre-scan] Result length:', visionDescription.length, 'chars');
+          console.log('[Vision Pre-scan] Preview:', visionDescription.substring(0, 300));
 
           // Now replace the last message: strip images, inject vision description as text
           const textParts = lastRecentMsg.content
@@ -453,7 +480,8 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
             .join('\n');
 
           const enhancedUserText = (textParts || 'Tolong periksa dan analisis struk belanja ini.') +
-            '\n\n--- HASIL PEMINDAIAN GAMBAR (Vision AI) ---\n' + visionDescription;
+            '\n\n--- HASIL PEMINDAIAN GAMBAR (Vision OCR) ---\n' + visionDescription +
+            '\n--- AKHIR HASIL PEMINDAIAN ---';
 
           recentMessages[recentMessages.length - 1] = {
             role: 'user',

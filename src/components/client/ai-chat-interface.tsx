@@ -21,7 +21,7 @@ const SUGGESTIONS = [
   { title: '💡 Saran Hemat Pengeluaran', desc: 'Dapatkan tips hemat konkret berdasarkan transaksi terakhir.', prompt: 'Berikan tips hemat berdasarkan pengeluaran saya.' }
 ];
 
-const compressImageBase64 = (base64Str: string, maxWidth = 512, maxHeight = 512, quality = 0.4): Promise<string> => {
+const compressImageBase64 = (base64Str: string, maxWidth = 1024, maxHeight = 1024, quality = 0.65): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
     img.src = base64Str;
@@ -29,7 +29,7 @@ const compressImageBase64 = (base64Str: string, maxWidth = 512, maxHeight = 512,
       let width = img.width;
       let height = img.height;
 
-      // Maintain aspect ratio while scaling to max 1600px width or height
+      // Maintain aspect ratio while scaling down
       if (width > height) {
         if (width > maxWidth) {
           height = Math.round((height * maxWidth) / width);
