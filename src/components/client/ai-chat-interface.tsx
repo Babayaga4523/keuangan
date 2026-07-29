@@ -161,7 +161,8 @@ const ReceiptDraftCard = ({
         category,
         date,
         accountId: selectedAccount,
-        items: draft.items || []
+        items: draft.items || [],
+        receiptUrl: draft.receiptUrl
       }, draft.imageHash);
       if (success) {
         setIsSaved(true);
@@ -478,7 +479,9 @@ export default function AiChatInterface() {
         amount: draftData.amount,
         type: 'EXPENSE',
         description,
-        date: draftData.date
+        date: draftData.date,
+        receiptUrl: draftData.receiptUrl || undefined,
+        tags: 'ocr, struk'
       });
 
       if (!res.success) {

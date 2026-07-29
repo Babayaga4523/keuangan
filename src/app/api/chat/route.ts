@@ -553,7 +553,8 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
                 accountName: args.accountName || '',
                 confidence: args.confidence,
                 items: args.items || [],
-                imageHash
+                imageHash,
+                receiptUrl: imageBase64 ? `data:image/jpeg;base64,${imageBase64}` : undefined
               }
             };
           } catch (err: any) {
