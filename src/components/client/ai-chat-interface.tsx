@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useChat, Message } from 'ai/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Send, User, Bot, Loader2, RefreshCw, Plus, Trash2, Menu, MessageSquare, ChevronDown } from 'lucide-react';
+import { Send, User, Bot, Loader2, RefreshCw, Plus, Trash2, Menu, MessageSquare, ChevronDown, Camera, Image as ImageIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 
 const generateUUID = () => {
@@ -537,6 +537,8 @@ export default function AiChatInterface() {
   const chatCanvasRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
 
   const scrollToBottom = () => {
     if (chatCanvasRef.current) {
@@ -1070,13 +1072,22 @@ export default function AiChatInterface() {
                   onSubmit={handleFormSubmit}
                   className="flex flex-col gap-1.5 p-2 sm:p-3 border border-[#c6c6cd] rounded-xl bg-[#f7f9fb] focus-within:bg-white focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all shadow-sm"
                 >
-                  {/* File Input */}
                   <input 
                     type="file"
                     ref={fileInputRef}
                     className="hidden"
                     accept="image/*"
                     multiple
+                    onChange={handleFileChange}
+                  />
+
+                  {/* Hidden File Input for Camera Direct Capture */}
+                  <input 
+                    type="file"
+                    ref={cameraInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    capture="environment"
                     onChange={handleFileChange}
                   />
 
@@ -1091,7 +1102,7 @@ export default function AiChatInterface() {
                             onClick={() => removeAttachment(idx)}
                             className="absolute top-0.5 right-0.5 bg-black/60 hover:bg-black text-white p-0.5 rounded-full shadow-xs active:scale-90 transition-all flex items-center justify-center"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                            <svg xmlns="http://www.w3.org/2008/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
                               <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                             </svg>
                           </button>
@@ -1100,15 +1111,54 @@ export default function AiChatInterface() {
                     </div>
                   )}
 
-                  <div className="flex items-end gap-4 w-full">
-                    <button 
-                      type="button" 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="p-2 text-[#76777d] hover:text-black hover:bg-slate-100 rounded-lg transition-colors shrink-0"
-                      title="Unggah Gambar/Struk"
-                    >
-                      <svg xmlns="http://www.w3.org/2008/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-                    </button>
+                  <div className="flex items-end gap-3 w-full">
+                    {/* Attachment Popover Trigger */}
+                    <div className="relative shrink-0">
+                      <button 
+                        type="button" 
+                        onClick={() => setAttachMenuOpen(!attachMenuOpen)}
+                        className={`p-2 rounded-lg transition-all shrink-0 flex items-center justify-center ${
+                          attachMenuOpen ? 'bg-black text-white' : 'text-[#76777d] hover:text-black hover:bg-slate-100'
+                        }`}
+                        title="Lampirkan Foto atau Struk"
+                      >
+                        <Plus className={`w-5 h-5 transition-transform duration-200 ${attachMenuOpen ? 'rotate-45' : ''}`} />
+                      </button>
+
+                      {/* Attachment Popover Options Menu */}
+                      {attachMenuOpen && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-20" 
+                            onClick={() => setAttachMenuOpen(false)} 
+                          />
+                          <div className="absolute bottom-12 left-0 z-30 w-52 bg-white border border-slate-200 rounded-xl shadow-xl p-1.5 space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                cameraInputRef.current?.click();
+                                setAttachMenuOpen(false);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors text-left"
+                            >
+                              <Camera className="w-4 h-4 text-blue-600 shrink-0" />
+                              <span>Ambil Foto (Kamera)</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                fileInputRef.current?.click();
+                                setAttachMenuOpen(false);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg transition-colors text-left"
+                            >
+                              <ImageIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span>Pilih dari Galeri</span>
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                     
                     <textarea
                       ref={textareaRef}
