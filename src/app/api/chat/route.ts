@@ -1,4 +1,4 @@
-import { streamText, tool, jsonSchema } from 'ai';
+import { streamText, generateText, tool, jsonSchema } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createServerClient } from '@/lib/supabase-server';
 import { cookies } from 'next/headers';
@@ -411,6 +411,69 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
       baseURL: 'https://models.inference.ai.azure.com',
       apiKey: process.env.GITHUB_PAT || '',
     });
+
+    // ========== TWO-PASS VISION: Pre-scan images with a lightweight call ==========
+    // GitHub Models has an 8000-token limit. The full system prompt + base64 image
+    // easily exceeds that. So we first "look" at the image with a tiny prompt,
+    // then feed the text description to the main chat (which has the full system prompt + tools).
+    const lastRecentMsg = recentMessages[recentMessages.length - 1];
+    let visionDescription = '';
+    if (lastRecentMsg?.role === 'user' && Array.isArray(lastRecentMsg.content)) {
+      const imageParts = lastRecentMsg.content.filter((p: any) => p.type === 'image');
+      if (imageParts.length > 0) {
+        try {
+          console.time('Vision Pre-scan');
+          const visionPromptParts: any[] = [
+            {
+              type: 'text',
+              text: 'Kamu adalah asisten OCR struk belanja. Jelaskan gambar ini dengan DETAIL. Jika ini struk belanja/nota, sebutkan: nama toko/merchant, tanggal transaksi, daftar item beserta harga masing-masing, total pembayaran, dan metode pembayaran (jika terlihat). Jika bukan struk, jelaskan apa yang kamu lihat. Jawab dalam Bahasa Indonesia. JANGAN gunakan format LaTeX.'
+            },
+            ...imageParts
+          ];
+
+          const visionResult = await generateText({
+            model: githubOpenAI('gpt-4o'),
+            messages: [
+              {
+                role: 'user',
+                content: visionPromptParts
+              }
+            ],
+            temperature: 0.1,
+            maxTokens: 1500
+          });
+          visionDescription = visionResult.text || '';
+          console.timeEnd('Vision Pre-scan');
+          console.log('[Vision Pre-scan] Result length:', visionDescription.length, 'chars');
+
+          // Now replace the last message: strip images, inject vision description as text
+          const textParts = lastRecentMsg.content
+            .filter((p: any) => p.type === 'text')
+            .map((p: any) => p.text)
+            .join('\n');
+
+          const enhancedUserText = (textParts || 'Tolong periksa dan analisis struk belanja ini.') +
+            '\n\n--- HASIL PEMINDAIAN GAMBAR (Vision AI) ---\n' + visionDescription;
+
+          recentMessages[recentMessages.length - 1] = {
+            role: 'user',
+            content: enhancedUserText
+          };
+        } catch (visionErr: any) {
+          console.error('[Vision Pre-scan] Failed:', visionErr.message);
+          // Fallback: strip images and continue with text-only
+          const textParts = lastRecentMsg.content
+            .filter((p: any) => p.type === 'text')
+            .map((p: any) => p.text)
+            .join('\n');
+          recentMessages[recentMessages.length - 1] = {
+            role: 'user',
+            content: textParts || 'Tolong periksa dan analisis struk belanja ini. (Gambar gagal diproses)'
+          };
+        }
+      }
+    }
+    // ========== END TWO-PASS VISION ==========
 
     const systemInstructions = systemPrompt + '\n\n' + 
       '## FITUR PEMINDAI STRUK BELANJA (OCR STRUK)\n' +
