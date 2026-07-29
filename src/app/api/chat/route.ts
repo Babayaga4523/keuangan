@@ -424,30 +424,49 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
         try {
           console.time('Vision Pre-scan');
           
-          const ocrPrompt = `Kamu adalah mesin OCR struk belanja yang sangat teliti. Tugas kamu adalah membaca SEMUA teks pada gambar ini secara PERSIS seperti yang tertulis.
+          const ocrPrompt = `Kamu adalah mesin OCR struk belanja Indonesia yang sangat teliti dan akurat. Tugas kamu adalah membaca SEMUA teks pada gambar ini secara PERSIS seperti yang tertulis.
 
-INSTRUKSI:
-1. Baca gambar ini karakter demi karakter dengan sangat hati-hati
-2. Perhatikan perbedaan angka 0 vs huruf O, angka 1 vs huruf l/I
+INSTRUKSI PENTING:
+1. Baca gambar ini karakter demi karakter dengan SANGAT hati-hati
+2. Perhatikan perbedaan: angka 0 vs huruf O, angka 1 vs huruf l/I, angka 8 vs huruf B
 3. Baca angka harga dari KANAN ke KIRI untuk menghindari kesalahan digit
-4. Jika ada teks yang buram, tulis [tidak terbaca] bukan mengarang
+4. Jika ada teks yang buram, tulis [tidak terbaca] — JANGAN mengarang angka
+5. Perhatikan tanda negatif (-) di depan angka yang artinya DISKON/POTONGAN
+
+DETEKSI DISKON & POTONGAN (sangat penting!):
+Cari dan baca SEMUA jenis potongan harga yang mungkin muncul di struk:
+- "DISC", "DISKON", "DISCOUNT", "DSC" → diskon umum
+- "HEMAT", "SAVING", "SAVE" → potongan harga langsung
+- "POT.HRG", "POT HARGA", "POTONGAN" → potongan harga
+- "MEMBER DISC", "MEMBER PRICE", "HRG MEMBER" → diskon member/kartu anggota
+- "PROMO", "SPECIAL PRICE", "HRG PROMO" → harga promo
+- "KUPON", "COUPON", "VOUCHER" → diskon kupon/voucher
+- "CASHBACK", "CB" → cashback
+- "BUNDLE", "BELI 2 GRATIS 1", "BUY 1 GET 1" → promo bundling
+- "PEMBULATAN", "ROUNDING" → pembulatan (biasanya potongan kecil)
+- Angka NEGATIF atau dalam tanda kurung (xxx) → potongan per-item
+- Baris dengan harga dicoret atau 2 harga berbeda → ada diskon
 
 FORMAT OUTPUT (jika ini struk/nota belanja):
 TOKO: [nama toko persis seperti tertulis]
 ALAMAT: [alamat jika ada]
-TANGGAL: [tanggal dan jam persis dari struk, format DD/MM/YYYY HH:MM jika tersedia]
+TANGGAL: [tanggal dan jam persis dari struk]
 KASIR: [nama kasir jika ada]
+NO. STRUK: [nomor struk/transaksi jika ada]
 
 DAFTAR ITEM:
 1. [nama item persis] - Qty: [jumlah] x Rp [harga satuan] = Rp [subtotal]
+   DISKON ITEM: -Rp [jumlah diskon] ([keterangan diskon, misal: "Member Price", "Promo"])
 2. [item berikutnya...]
 
-SUBTOTAL: Rp [angka]
-DISKON: Rp [angka, jika ada]
-PAJAK/PPN: Rp [angka, jika ada]
-TOTAL: Rp [angka TOTAL AKHIR yang dibayar]
-PEMBAYARAN: [tunai/debit/kredit/e-wallet + nama bank/provider jika tertera]
+SUBTOTAL: Rp [jumlah total harga semua item sebelum diskon total]
+DISKON/POTONGAN: -Rp [total semua diskon] ([keterangan/label diskon])
+PAJAK/PPN: Rp [jumlah pajak, jika ada]
+TOTAL BAYAR: Rp [angka GRAND TOTAL / TOTAL AKHIR yang benar-benar dibayar]
+PEMBAYARAN: [tunai/debit/kredit/e-wallet/QRIS + nama bank/provider]
 KEMBALIAN: Rp [angka, jika ada]
+
+CATATAN KHUSUS: [tulis jika ada info penting lain: no. member, poin, dll]
 
 Jika gambar ini BUKAN struk/nota belanja, jelaskan apa yang kamu lihat dengan singkat.
 JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
@@ -541,7 +560,7 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
 
     const chatTools = {
       extract_receipt_data: tool({
-        description: 'Mengekstrak data terstruktur dari gambar struk belanja yang diunggah oleh pengguna. Tool ini HANYA mengembalikan data draf hasil OCR tanpa menyimpannya ke database langsung.',
+        description: 'Mengekstrak data terstruktur dari gambar struk belanja yang diunggah oleh pengguna. Tool ini HANYA mengembalikan data draf hasil OCR tanpa menyimpannya ke database langsung. Pastikan amount adalah TOTAL AKHIR yang dibayar (setelah diskon dan termasuk pajak).',
         parameters: jsonSchema({
           type: 'object',
           properties: {
@@ -553,9 +572,25 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
               type: 'string', 
               description: 'Tanggal transaksi dalam format YYYY-MM-DD. Gunakan tanggal struk jika ada. Jika tidak tertera, gunakan tanggal hari ini.' 
             },
+            subtotal: {
+              type: 'integer',
+              description: 'Subtotal sebelum diskon dan pajak (jumlah harga semua item). Angka bulat positif dalam Rupiah. Jika tidak tertera, isi 0.'
+            },
+            discount: {
+              type: 'integer',
+              description: 'Total diskon/potongan harga dalam Rupiah (angka bulat positif). Termasuk: diskon member, promo, kupon, cashback, potongan harga, hemat, dll. Isi 0 jika tidak ada diskon.'
+            },
+            discountLabel: {
+              type: 'string',
+              description: 'Label/keterangan diskon yang tertera di struk (misal: "Member Discount", "Promo Hemat", "Kupon 10%", "Cashback GoPay"). Kosongkan jika tidak ada diskon.'
+            },
+            tax: {
+              type: 'integer',
+              description: 'Pajak/PPN dalam Rupiah (angka bulat positif). Isi 0 jika tidak tertera.'
+            },
             amount: { 
               type: 'integer', 
-              description: 'Total pengeluaran nominal dalam Rupiah (angka bulat positif, misal: 47500). Jangan sertakan desimal, koma, atau titik.' 
+              description: 'TOTAL AKHIR yang dibayar (setelah diskon dikurangi dan pajak ditambahkan). Ini adalah angka GRAND TOTAL / TOTAL BAYAR di struk. Angka bulat positif dalam Rupiah.' 
             },
             category: { 
               type: 'string', 
@@ -564,7 +599,12 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
             },
             accountName: {
               type: 'string',
-              description: 'Nama metode pembayaran/rekening yang tertera di struk atau disebutkan user (misal: BCA, Mandiri, Cash, Gopay, dll).'
+              description: 'Nama metode pembayaran/rekening yang tertera di struk (misal: BCA, Mandiri, Cash, Gopay, OVO, DANA, ShopeePay, QRIS, Debit, Kredit, dll).'
+            },
+            paymentMethod: {
+              type: 'string',
+              enum: ['TUNAI', 'DEBIT', 'KREDIT', 'E-WALLET', 'QRIS', 'TRANSFER', 'LAINNYA'],
+              description: 'Jenis metode pembayaran. TUNAI=uang tunai/cash, DEBIT=kartu debit, KREDIT=kartu kredit, E-WALLET=GoPay/OVO/DANA/ShopeePay, QRIS=pembayaran QRIS, TRANSFER=transfer bank.'
             },
             confidence: { 
               type: 'string', 
@@ -577,9 +617,11 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
               items: {
                 type: 'object',
                 properties: {
-                  name: { type: 'string', description: 'Nama item/barang' },
-                  price: { type: 'number', description: 'Harga per unit item' },
-                  qty: { type: 'integer', description: 'Jumlah kuantitas item' }
+                  name: { type: 'string', description: 'Nama item/barang persis seperti di struk' },
+                  price: { type: 'number', description: 'Harga per unit item (harga normal/sebelum diskon per-item)' },
+                  qty: { type: 'integer', description: 'Jumlah kuantitas item. Default 1.' },
+                  discount: { type: 'number', description: 'Diskon per item ini dalam Rupiah (jika ada potongan khusus item). Isi 0 jika tidak ada.' },
+                  finalPrice: { type: 'number', description: 'Harga akhir item setelah diskon per-item (price * qty - discount). Jika tidak ada diskon, sama dengan price * qty.' }
                 },
                 required: ['name', 'price']
               }
@@ -639,9 +681,14 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
               draft: {
                 merchant: args.merchant,
                 date: args.date,
+                subtotal: args.subtotal || 0,
+                discount: args.discount || 0,
+                discountLabel: args.discountLabel || '',
+                tax: args.tax || 0,
                 amount: args.amount,
                 category: args.category,
                 accountName: args.accountName || '',
+                paymentMethod: args.paymentMethod || 'LAINNYA',
                 confidence: args.confidence,
                 items: args.items || [],
                 imageHash,

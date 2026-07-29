@@ -279,14 +279,80 @@ const ReceiptDraftCard = ({
         {draft.items && draft.items.length > 0 && (
           <div className="mt-2 pt-2 border-t border-slate-100">
             <label className="font-semibold text-slate-500 uppercase text-[9px] block mb-1">Rincian Barang</label>
-            <div className="bg-slate-50/50 rounded-lg p-2 max-h-24 overflow-y-auto space-y-1 border border-slate-100">
-              {draft.items.map((item: any, idx: number) => (
-                <div key={idx} className="flex justify-between text-[10px] text-slate-600 font-medium">
-                  <span className="truncate pr-2">{item.name} {item.qty > 1 ? `x${item.qty}` : ''}</span>
-                  <span className="font-mono text-slate-900 shrink-0">Rp {(item.price * (item.qty || 1)).toLocaleString('id-ID')}</span>
-                </div>
-              ))}
+            <div className="bg-slate-50/50 rounded-lg p-2 max-h-32 overflow-y-auto space-y-1 border border-slate-100">
+              {draft.items.map((item: any, idx: number) => {
+                const hasItemDiscount = item.discount && item.discount > 0;
+                const originalTotal = item.price * (item.qty || 1);
+                const finalTotal = hasItemDiscount ? (item.finalPrice || originalTotal - item.discount) : originalTotal;
+                return (
+                  <div key={idx} className="text-[10px] text-slate-600 font-medium">
+                    <div className="flex justify-between">
+                      <span className="truncate pr-2">{item.name} {(item.qty || 1) > 1 ? `x${item.qty}` : ''}</span>
+                      <span className={`font-mono shrink-0 ${hasItemDiscount ? 'line-through text-slate-400' : 'text-slate-900'}`}>
+                        Rp {originalTotal.toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                    {hasItemDiscount && (
+                      <div className="flex justify-between text-emerald-600">
+                        <span className="text-[9px] pl-2">↳ Diskon item</span>
+                        <span className="font-mono text-[10px]">Rp {finalTotal.toLocaleString('id-ID')}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
+          </div>
+        )}
+
+        {/* Financial Summary: Subtotal → Discount → Tax → Total */}
+        {(draft.discount > 0 || draft.tax > 0 || draft.subtotal > 0) && (
+          <div className="mt-2 pt-2 border-t border-dashed border-slate-200 space-y-1">
+            <label className="font-semibold text-slate-500 uppercase text-[9px] block mb-1">Ringkasan</label>
+            
+            {draft.subtotal > 0 && (
+              <div className="flex justify-between text-[10px] text-slate-600">
+                <span>Subtotal</span>
+                <span className="font-mono">Rp {draft.subtotal.toLocaleString('id-ID')}</span>
+              </div>
+            )}
+
+            {draft.discount > 0 && (
+              <div className="flex justify-between text-[10px] text-emerald-600 font-semibold">
+                <span className="flex items-center gap-1">
+                  🏷️ {draft.discountLabel || 'Diskon'}
+                </span>
+                <span className="font-mono">- Rp {draft.discount.toLocaleString('id-ID')}</span>
+              </div>
+            )}
+
+            {draft.tax > 0 && (
+              <div className="flex justify-between text-[10px] text-slate-500">
+                <span>PPN / Pajak</span>
+                <span className="font-mono">+ Rp {draft.tax.toLocaleString('id-ID')}</span>
+              </div>
+            )}
+
+            <div className="flex justify-between text-xs text-black font-bold pt-1 border-t border-slate-200">
+              <span>Total Bayar</span>
+              <span className="font-mono">Rp {amount.toLocaleString('id-ID')}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Payment Method Badge */}
+        {draft.paymentMethod && draft.paymentMethod !== 'LAINNYA' && (
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className="text-[9px] font-semibold text-slate-500 uppercase">Pembayaran:</span>
+            <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold text-[9px] border border-blue-200">
+              {draft.paymentMethod === 'TUNAI' ? '💵 Tunai' :
+               draft.paymentMethod === 'DEBIT' ? '💳 Debit' :
+               draft.paymentMethod === 'KREDIT' ? '💳 Kredit' :
+               draft.paymentMethod === 'E-WALLET' ? '📱 E-Wallet' :
+               draft.paymentMethod === 'QRIS' ? '📲 QRIS' :
+               draft.paymentMethod === 'TRANSFER' ? '🏦 Transfer' : draft.paymentMethod}
+              {draft.accountName ? ` (${draft.accountName})` : ''}
+            </span>
           </div>
         )}
       </div>
