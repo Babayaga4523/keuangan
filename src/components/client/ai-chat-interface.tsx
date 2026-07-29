@@ -539,6 +539,22 @@ export default function AiChatInterface() {
         : '';
       const description = `[OCR] ${draftData.merchant}${descItems ? `: ${descItems}` : ''}`;
 
+      // Fallback: If server tool result didn't include receiptUrl (e.g. stripped due to size limit), 
+      // grab the image from the user's latest chat message attachments directly on the client.
+      let finalReceiptUrl = draftData.receiptUrl;
+      if (!finalReceiptUrl) {
+        const lastUserMsg = messages.slice().reverse().find(m => m.role === 'user' && m.experimental_attachments && m.experimental_attachments.length > 0);
+        if (lastUserMsg && lastUserMsg.experimental_attachments) {
+          const imgAtt = lastUserMsg.experimental_attachments.find((att: any) => att.contentType?.startsWith('image/'));
+          if (imgAtt) {
+            finalReceiptUrl = imgAtt.url;
+            console.log('Using client-side image attachment for receiptUrl');
+          }
+        }
+      }
+
+      console.log('Saving transaction with receiptUrl length:', finalReceiptUrl?.length || 0);
+
       const res = await actionCreateTransaction({
         accountId: draftData.accountId,
         categoryId: categoryId || undefined,
@@ -546,7 +562,7 @@ export default function AiChatInterface() {
         type: 'EXPENSE',
         description,
         date: draftData.date,
-        receiptUrl: draftData.receiptUrl || undefined,
+        receiptUrl: finalReceiptUrl || undefined,
         tags: 'ocr, struk'
       });
 
