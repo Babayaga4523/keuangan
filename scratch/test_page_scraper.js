@@ -1,34 +1,44 @@
-async function scrapeArticleText(url) {
+async function fetchPageContent(url) {
   try {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), 3500);
-
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       }
     });
     clearTimeout(id);
-
-    if (res.ok) {
-      const html = await res.text();
-      // Extract <p> tags text
-      const pMatches = html.match(/<p[\s\S]*?>([\s\S]*?)<\/p>/gi) || [];
-      const paragraphs = pMatches
-        .map(p => p.replace(/<[^>]*>/g, '').trim())
-        .filter(text => text.length > 40 && !text.toLowerCase().includes('cookie') && !text.toLowerCase().includes('copyright'));
-
-      const pageText = paragraphs.slice(0, 5).join('\n\n');
-      console.log('✅ BERHASIL AMBIL ISI BADAN WEB (Full Body Paragraphs):');
-      console.log('----------------------------------------------------');
-      console.log(pageText.substring(0, 600) + '...\n');
-      return pageText;
-    }
+    if (!res.ok) return null;
+    const html = await res.text();
+    // Extract paragraph text or main text
+    const cleanText = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return cleanText.substring(0, 1000);
   } catch (err) {
-    console.log('Scrape error:', err.message);
+    return null;
   }
-  return null;
 }
 
-scrapeArticleText('https://id.wikipedia.org/wiki/IPhone_15');
+async function testFullWebPageReading() {
+  console.log('🔎 TESTING FULL WEBPAGE BODY CONTENT SCRAPING:\n');
+  const testUrl = 'https://id.wikipedia.org/wiki/iPhone_15_Pro';
+  console.log(`Mengunduh isi halaman web lengkap dari: ${testUrl}...`);
+
+  const pageBody = await fetchPageContent(testUrl);
+  if (pageBody) {
+    console.log('✅ BERHASIL MEMBACA ISI PENUH WEB! (Snippet 300 Karakter Pertama):');
+    console.log('--------------------------------------------------');
+    console.log(pageBody.substring(0, 300) + '...');
+    console.log('--------------------------------------------------');
+  } else {
+    console.log('❌ Gagal mengunduh isi halaman web.');
+  }
+}
+
+testFullWebPageReading();

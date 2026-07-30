@@ -698,8 +698,39 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
               console.log('[Web Search Engine 3 Error]:', e.message);
             }
 
-            if (results.length > 0) {
-              return { success: true, query, results };
+            // Engine 4: Deep Page Body Scraper (Membuat AI membaca isi paragraf web lengkap)
+            const resultsWithBody = await Promise.all(
+              results.slice(0, 4).map(async (item) => {
+                if (!item.url) return item;
+                try {
+                  const pageRes = await fetchWithTimeout(item.url, {
+                    headers: { 
+                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                    }
+                  }, 2500);
+                  if (pageRes.ok) {
+                    const html = await pageRes.text();
+                    const cleanBody = html
+                      .replace(/<script[\s\S]*?<\/script>/gi, '')
+                      .replace(/<style[\s\S]*?<\/style>/gi, '')
+                      .replace(/<[^>]+>/g, ' ')
+                      .replace(/\s+/g, ' ')
+                      .trim()
+                      .substring(0, 1200);
+                    if (cleanBody && cleanBody.length > 100) {
+                      return { ...item, article_full_body: cleanBody };
+                    }
+                  }
+                } catch (e) {
+                  // Silent fallback to snippet if page scrape times out
+                }
+                return item;
+              })
+            );
+
+            if (resultsWithBody.length > 0) {
+              return { success: true, query, results: resultsWithBody };
             }
 
             return { success: false, query, message: 'Pencarian web tidak menemukan hasil spesifik.' };
