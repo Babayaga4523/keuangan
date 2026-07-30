@@ -28,13 +28,13 @@ const preprocessMath = (content: string) => {
   if (typeof content !== 'string') return content;
   let processed = content;
   // Replace \[ ... \] with $$ ... $$
-  processed = processed.replace(/\\\[(.*?)\\\]/gs, '$$$$$1$$$$');
+  processed = processed.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$');
   // Replace \( ... \) with $ ... $
-  processed = processed.replace(/\\\((.*?)\\\)/gs, '$$$1$$');
+  processed = processed.replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$$');
   // Kadang AI lupa backslash: [ \text{...} ]
-  processed = processed.replace(/\[\s*(\\text\{.*?\}.*?)\s*\]/gs, '$$$$ $1 $$$$');
+  processed = processed.replace(/\[\s*(\\text\{[\s\S]*?\}[\s\S]*?)\s*\]/g, '$$$$ $1 $$$$');
   // Kadang AI menulis [ Waktu = ... ]
-  processed = processed.replace(/\[\s*(Waktu = .*?)\s*\]/gs, '$$$$ $1 $$$$');
+  processed = processed.replace(/\[\s*(Waktu = [\s\S]*?)\s*\]/g, '$$$$ $1 $$$$');
   return processed;
 };
 
