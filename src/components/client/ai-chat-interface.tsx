@@ -4,6 +4,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useChat, Message } from 'ai/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { Send, User, Bot, Loader2, RefreshCw, Plus, Trash2, Menu, MessageSquare, ChevronDown, Camera, Image as ImageIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 
@@ -372,6 +375,25 @@ const ReceiptDraftCard = ({
   );
 };
 
+const TransactionSuccessCard = ({ toolInvocation }: { toolInvocation: any }) => {
+  const { args, result } = toolInvocation;
+  if (!result || !result.success) return null;
+
+  return (
+    <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs max-w-sm w-full space-y-1 mt-2 shadow-xs">
+      <p className="font-bold flex items-center gap-1.5">
+        <span className="text-sm">✅</span> 
+        Berhasil Dicatat
+      </p>
+      <div className="pl-5 space-y-0.5 mt-1 text-[11px]">
+        <p><span className="font-semibold text-slate-500 uppercase text-[9px] mr-1">Deskripsi:</span> {args.description}</p>
+        <p><span className="font-semibold text-slate-500 uppercase text-[9px] mr-1">Nominal:</span> Rp {Number(args.amount).toLocaleString('id-ID')}</p>
+        <p><span className="font-semibold text-slate-500 uppercase text-[9px] mr-1">Kategori:</span> {args.category}</p>
+      </div>
+    </div>
+  );
+};
+
 const MemoizedMessageBubble = React.memo(({ 
   message, 
   isStreaming,
@@ -426,7 +448,8 @@ const MemoizedMessageBubble = React.memo(({
           ) : (
             <div className={`markdown-body w-full overflow-hidden min-w-0 ${isStreaming ? 'streaming-caret' : ''}`}>
               <ReactMarkdown 
-                remarkPlugins={[remarkGfm]}
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
                 components={{
                   h1: ({node, ...props}) => <h1 className="text-sm sm:text-base font-bold mb-3 mt-4 text-black first:mt-0 flex items-center gap-2 border-b border-slate-200/60 pb-1.5" {...props} />,
                   h2: ({node, ...props}) => <h2 className="text-xs sm:text-sm font-bold mb-2.5 mt-3.5 text-black first:mt-0" {...props} />,
@@ -473,6 +496,13 @@ const MemoizedMessageBubble = React.memo(({
                     toolInvocation={toolInv} 
                     categories={categories}
                     onSave={onSaveTransaction}
+                  />
+                );
+              } else if (toolInv.toolName === 'add_transaction') {
+                return (
+                  <TransactionSuccessCard 
+                    key={toolInv.toolCallId}
+                    toolInvocation={toolInv} 
                   />
                 );
               }

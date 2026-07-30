@@ -147,6 +147,16 @@ export async function POST(req: Request) {
       ? (totalBalance / totalExpense).toFixed(1)
       : 'N/A';
 
+    // Proactive Alerts (Peringatan Otomatis)
+    let proactiveAlert = '';
+    if (totalExpense > 0) {
+      if (actualExpenseThisMonth > totalExpense) {
+        proactiveAlert = `🚨 **PERINGATAN PROAKTIF:** Pengeluaran aktual bulan ini (${formatRp(actualExpenseThisMonth)}) telah MELEBIHI total anggaran rutin (${formatRp(totalExpense)}). Berikan peringatan ramah namun tegas di awal responsmu!`;
+      } else if (actualExpenseThisMonth > totalExpense * 0.8) {
+        proactiveAlert = `⚠️ **INFO PROAKTIF:** Pengeluaran aktual bulan ini (${formatRp(actualExpenseThisMonth)}) sudah mencapai ${(actualExpenseThisMonth / totalExpense * 100).toFixed(0)}% dari anggaran rutin. Berikan notifikasi singkat agar user berhati-hati.`;
+      }
+    }
+
     // Simulasi impian
     let dreamAnalysis = '';
     if (simulator?.dreamName && simulator?.dreamCost) {
@@ -257,6 +267,8 @@ ${Object.keys(categoryTotals).length > 0
 ${dreamAnalysis}
 ${recentSummary}
 
+${proactiveAlert ? `\n${proactiveAlert}\n` : ''}
+
 ---
 
 # CARA KAMU BERPIKIR (FRAMEWORK ANALISIS)
@@ -294,6 +306,11 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
 **Jika data tidak cukup:**
 - Tanya balik dengan pertanyaan spesifik, bukan menolak
 - Contoh: "Bisa kasih tahu pengeluaran bulanan kamu berapa? Biar bisa hitung lebih akurat."
+
+**TENTANG BUDGET VS AKTUAL (SANGAT PENTING):**
+- **Gunakan "Arus Kas Bulanan Rutin (Anggaran Rutin)"** saat user bertanya tentang proyeksi, simulasi, rencana menabung, atau rencana masa depan. Ini adalah "Blueprint" keuangan mereka.
+- **Gunakan "Realisasi Transaksi Bulan Ini (Aktual)"** HANYA ketika user secara spesifik bertanya tentang pengeluaran riil bulan ini, atau bertanya "kenapa saya boros?".
+- Jangan campur adukkan keduanya kecuali diminta. Jika pengeluaran aktual jauh melebihi anggaran, gunakan \`proactiveAlert\` untuk mengingatkan mereka, namun tetap gunakan Anggaran Rutin untuk simulasi jangka panjang kecuali user meminta sebaliknya.
 
 **Topik yang dijawab:**
 - ✅ Perencanaan anggaran, tabungan, investasi, utang, simulasi finansial, darurat dana, gaya hidup finansial
