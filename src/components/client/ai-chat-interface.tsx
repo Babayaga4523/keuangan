@@ -7,7 +7,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { Send, User, Bot, Loader2, RefreshCw, Plus, Trash2, Menu, MessageSquare, ChevronDown, Camera, Image as ImageIcon } from 'lucide-react';
+import { Send, User, Bot, Loader2, RefreshCw, Plus, Trash2, Menu, MessageSquare, ChevronDown, Camera, Image as ImageIcon, ThumbsUp, ThumbsDown, Copy, Share2, Globe, Sparkles, Settings, HelpCircle, Check } from 'lucide-react';
 import { Button } from '../ui/button';
 
 const generateUUID = () => {
@@ -408,20 +408,234 @@ const TransactionSuccessCard = ({ toolInvocation }: { toolInvocation: any }) => 
   );
 };
 
+const TransactionDeleteCard = ({ toolInvocation, onDelete }: { toolInvocation: any, onDelete: (txId: string) => Promise<boolean> }) => {
+  const { args, result } = toolInvocation;
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleted, setIsDeleted] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  if (!result || !result.success) return null;
+  const draft = result.draft;
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    setDeleteError('');
+    try {
+      const success = await onDelete(draft.id);
+      if (success) {
+        setIsDeleted(true);
+      } else {
+        setDeleteError('Gagal menghapus transaksi.');
+      }
+    } catch (err: any) {
+      setDeleteError(err.message || 'Gagal menghapus transaksi.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  if (isDeleted) {
+    return (
+      <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs max-w-sm w-full space-y-1 mt-2 shadow-xs">
+        <p className="font-bold flex items-center gap-1.5">
+          <span className="text-sm">🗑️</span> Transaksi Dihapus
+        </p>
+        <p className="pl-5 font-semibold line-through text-[11px]">{draft.description} • Rp {Number(draft.amount).toLocaleString('id-ID')}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 bg-white border border-red-200 rounded-xl shadow-xs text-xs space-y-3.5 min-w-[300px] sm:min-w-[340px] max-w-sm w-full mt-2 text-slate-800">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+        <span className="font-bold text-red-600 text-sm flex items-center gap-1.5">
+          ⚠️ Konfirmasi Hapus
+        </span>
+      </div>
+      
+      {deleteError && (
+        <div className="p-2 bg-red-50 text-red-800 rounded-lg text-[10px] border border-red-100">
+          {deleteError}
+        </div>
+      )}
+
+      <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 space-y-1 text-[11px]">
+        <p><span className="font-semibold text-slate-500 w-16 inline-block">Tanggal:</span> {draft.transaction_date}</p>
+        <p><span className="font-semibold text-slate-500 w-16 inline-block">Nominal:</span> <span className="font-mono font-bold">Rp {Number(draft.amount).toLocaleString('id-ID')}</span></p>
+        <p><span className="font-semibold text-slate-500 w-16 inline-block">Tujuan:</span> {draft.description}</p>
+        <p><span className="font-semibold text-slate-500 w-16 inline-block">Kategori:</span> {draft.categories?.name}</p>
+      </div>
+      
+      <p className="text-[10px] text-slate-500 italic text-center">Apakah Anda yakin ingin menghapus transaksi ini? Saldo akan dikembalikan secara otomatis.</p>
+
+      <div className="pt-1.5 flex gap-2">
+        <button
+          type="button"
+          disabled={isDeleting}
+          onClick={handleDelete}
+          className="flex-1 py-1.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-center transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 active:scale-98"
+        >
+          {isDeleting ? <Loader2 className="h-3 w-3 animate-spin text-white" /> : null}
+          <span>Ya, Hapus Permanen</span>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const TransactionUpdateCard = ({ toolInvocation, onUpdate, categories }: { toolInvocation: any, onUpdate: (txId: string, data: any) => Promise<boolean>, categories: any[] }) => {
+  const { args, result } = toolInvocation;
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isUpdated, setIsUpdated] = useState(false);
+  const [updateError, setUpdateError] = useState('');
+  
+  if (!result || !result.success) return null;
+  const draft = result.original;
+  const updates = result.updates;
+
+  const [amount, setAmount] = useState<number>(updates.amount || draft.amount);
+  const [description, setDescription] = useState<string>(updates.description || draft.description);
+  const [categoryName, setCategoryName] = useState<string>(updates.category || draft.categories?.name || 'Lainnya');
+
+  const handleUpdate = async () => {
+    setIsUpdating(true);
+    setUpdateError('');
+    try {
+      const cat = categories.find((c: any) => c.name.toLowerCase() === categoryName.toLowerCase());
+      const categoryId = cat ? cat.id : undefined;
+
+      const success = await onUpdate(draft.id, {
+        amount: Number(amount),
+        description,
+        categoryId,
+        date: draft.transaction_date
+      });
+
+      if (success) {
+        setIsUpdated(true);
+      } else {
+        setUpdateError('Gagal mengedit transaksi.');
+      }
+    } catch (err: any) {
+      setUpdateError(err.message || 'Gagal mengedit transaksi.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  if (isUpdated) {
+    return (
+      <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl text-xs max-w-sm w-full space-y-1 mt-2 shadow-xs">
+        <p className="font-bold flex items-center gap-1.5">
+          <span className="text-sm">✏️</span> Transaksi Diperbarui
+        </p>
+        <p className="pl-5 font-semibold text-[11px]">{description} • Rp {Number(amount).toLocaleString('id-ID')}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs text-xs space-y-3.5 min-w-[300px] sm:min-w-[340px] max-w-sm w-full mt-2 text-slate-800">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+        <span className="font-bold text-black text-sm">✏️ Konfirmasi Perubahan</span>
+      </div>
+      
+      {updateError && (
+        <div className="p-2 bg-red-50 text-red-800 rounded-lg text-[10px] border border-red-100">
+          {updateError}
+        </div>
+      )}
+
+      <div className="space-y-2.5">
+        <div className="flex flex-col gap-0.5">
+          <label className="font-semibold text-slate-500 uppercase text-[9px]">Deskripsi</label>
+          <input 
+            type="text" 
+            value={description} 
+            onChange={e => setDescription(e.target.value)}
+            className="w-full px-2.5 py-1 border border-slate-200 rounded-lg focus:outline-none focus:border-black text-black bg-slate-50"
+          />
+        </div>
+
+        <div className="flex flex-col gap-0.5">
+          <label className="font-semibold text-slate-500 uppercase text-[9px]">Nominal (Rupiah)</label>
+          <input 
+            type="number" 
+            value={amount} 
+            onChange={e => setAmount(Number(e.target.value))}
+            className="w-full px-2.5 py-1 border border-slate-200 rounded-lg focus:outline-none focus:border-black font-semibold text-black bg-slate-50 font-mono"
+          />
+        </div>
+
+        <div className="flex flex-col gap-0.5">
+          <label className="font-semibold text-slate-500 uppercase text-[9px]">Kategori</label>
+          <select 
+            value={categoryName}
+            onChange={e => setCategoryName(e.target.value)}
+            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-black text-black bg-slate-50 text-xs"
+          >
+            {categories.filter(c => c.type === draft.type).map(c => (
+              <option key={c.id} value={c.name}>{c.name}</option>
+            ))}
+            <option value="Lainnya">Lainnya</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="pt-1.5 flex gap-2">
+        <button
+          type="button"
+          disabled={isUpdating}
+          onClick={handleUpdate}
+          className="flex-1 py-1.5 px-3 bg-black hover:bg-black/90 text-white font-bold rounded-lg text-center transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 active:scale-98"
+        >
+          {isUpdating ? <Loader2 className="h-3 w-3 animate-spin text-white" /> : null}
+          <span>Simpan Perubahan</span>
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const MemoizedMessageBubble = React.memo(({ 
   message, 
   isStreaming,
   categories,
-  onSaveTransaction
+  onSaveTransaction,
+  onDeleteTransaction,
+  onUpdateTransaction
 }: { 
   message: Message; 
   isStreaming?: boolean;
   categories: any[];
   onSaveTransaction: (toolCallId: string, draftData: any, imageHash: string) => Promise<boolean>;
+  onDeleteTransaction: (txId: string) => Promise<boolean>;
+  onUpdateTransaction: (txId: string, data: any) => Promise<boolean>;
 }) => {
+  const [copied, setCopied] = useState(false);
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+
+  const handleCopy = () => {
+    if (navigator.clipboard && message.content) {
+      navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   const isUser = message.role === 'user';
   const timeLabel = isUser ? 'You • Baru saja' : 'Opin AI • Baru saja';
   const toolInvocations = (message as any).toolInvocations || [];
+  
+  const hasVisibleContent = message.content && message.content.trim().length > 0;
+  const hasVisibleTools = toolInvocations.some((t: any) => 
+    ['extract_receipt_data', 'add_transaction', 'prepare_delete_transaction', 'prepare_update_transaction'].includes(t.toolName)
+  );
+
+  // Hide completely empty background tool calls (like search_transactions) unless streaming
+  if (!isUser && !hasVisibleContent && !hasVisibleTools && !isStreaming) {
+    return null;
+  }
 
   return (
     <div className={`flex gap-2.5 sm:gap-4 group ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -439,13 +653,14 @@ const MemoizedMessageBubble = React.memo(({
 
       {/* Bubble Container */}
       <div className={`flex-1 flex flex-col min-w-0 ${isUser ? 'items-end' : 'items-start'}`}>
-        <div
-          className={`rounded-xl p-3.5 sm:p-5 text-[13px] sm:text-[14px] leading-relaxed w-full max-w-[94%] sm:max-w-[85%] min-w-0 transition-all ${
-            isUser
-              ? 'bg-black text-white rounded-tr-none hover:shadow-xs'
-              : 'bg-[#f8fafc] border border-slate-200/65 text-[#191c1e] rounded-tl-none hover:shadow-xs'
-          }`}
-        >
+        {(hasVisibleContent || (isStreaming && !hasVisibleContent)) && (
+          <div
+            className={`rounded-xl p-3.5 sm:p-5 text-[13px] sm:text-[14px] leading-relaxed w-full max-w-[94%] sm:max-w-[85%] min-w-0 transition-all ${
+              isUser
+                ? 'bg-black text-white rounded-tr-none hover:shadow-xs'
+                : 'bg-[#f8fafc] border border-slate-200/65 text-[#191c1e] rounded-tl-none hover:shadow-xs'
+            }`}
+          >
           {isUser ? (
             <div className="space-y-2">
               <p className="whitespace-pre-wrap">{message.content}</p>
@@ -497,7 +712,62 @@ const MemoizedMessageBubble = React.memo(({
               </ReactMarkdown>
             </div>
           )}
-        </div>
+          </div>
+        )}
+
+        {/* Gemini Response Toolbar */}
+        {!isUser && hasVisibleContent && !isStreaming && (
+          <div className="flex items-center gap-1 mt-1.5 text-slate-400 pl-1">
+            <button 
+              type="button" 
+              onClick={() => setFeedback(feedback === 'up' ? null : 'up')}
+              className={`p-1.5 rounded-full hover:bg-slate-100 transition-colors ${feedback === 'up' ? 'text-blue-600 bg-blue-50' : 'hover:text-slate-700'}`}
+              title="Bagus"
+            >
+              <ThumbsUp className="w-3.5 h-3.5" />
+            </button>
+            <button 
+              type="button" 
+              onClick={() => setFeedback(feedback === 'down' ? null : 'down')}
+              className={`p-1.5 rounded-full hover:bg-slate-100 transition-colors ${feedback === 'down' ? 'text-red-600 bg-red-50' : 'hover:text-slate-700'}`}
+              title="Kurang Bagus"
+            >
+              <ThumbsDown className="w-3.5 h-3.5" />
+            </button>
+            <button 
+              type="button" 
+              onClick={handleCopy}
+              className="p-1.5 rounded-full hover:bg-slate-100 hover:text-slate-700 transition-colors"
+              title="Salin Teks"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+            <button 
+              type="button" 
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({ title: 'Respon Opin AI', text: message.content }).catch(() => {});
+                } else {
+                  handleCopy();
+                }
+              }}
+              className="p-1.5 rounded-full hover:bg-slate-100 hover:text-slate-700 transition-colors"
+              title="Bagikan"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+            </button>
+            <button 
+              type="button" 
+              onClick={() => {
+                window.open(`https://www.google.com/search?q=${encodeURIComponent((message.content || '').substring(0, 100))}`, '_blank');
+              }}
+              className="p-1.5 rounded-full hover:bg-slate-100 hover:text-slate-700 transition-colors"
+              title="Cek di Google Search"
+            >
+              <Globe className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Custom tool card below the assistant bubble */}
         {!isUser && toolInvocations.length > 0 && (
@@ -518,6 +788,33 @@ const MemoizedMessageBubble = React.memo(({
                     key={toolInv.toolCallId}
                     toolInvocation={toolInv} 
                   />
+                );
+              } else if (toolInv.toolName === 'prepare_delete_transaction') {
+                return (
+                  <TransactionDeleteCard
+                    key={toolInv.toolCallId}
+                    toolInvocation={toolInv}
+                    onDelete={onDeleteTransaction}
+                  />
+                );
+              } else if (toolInv.toolName === 'prepare_update_transaction') {
+                return (
+                  <TransactionUpdateCard
+                    key={toolInv.toolCallId}
+                    toolInvocation={toolInv}
+                    onUpdate={onUpdateTransaction}
+                    categories={categories}
+                  />
+                );
+              } else if (toolInv.toolName === 'web_search') {
+                const query = toolInv.args?.query || 'Mencari di web...';
+                const result = toolInv.result;
+                const isExecuting = toolInv.state === 'call' || !result;
+                return (
+                  <div key={toolInv.toolCallId} className="flex items-center gap-2 px-3 py-1.5 bg-blue-50/80 border border-blue-200/80 text-blue-800 rounded-full text-xs font-semibold my-1 shadow-2xs">
+                    <Globe className={`w-3.5 h-3.5 text-blue-600 ${isExecuting ? 'animate-spin' : ''}`} />
+                    <span>{isExecuting ? `Mencari "${query}" di internet...` : `Mencari web: "${query}" (${result?.results?.length || 0} hasil ditemukan)`}</span>
+                  </div>
                 );
               }
               return null;
@@ -647,12 +944,75 @@ export default function AiChatInterface() {
     }
   };
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages, error, setInput, append } = useChat({
+  const handleDeleteTransaction = async (txId: string) => {
+    try {
+      const { actionDeleteTransaction } = await import('@/lib/actions');
+      const res = await actionDeleteTransaction(txId);
+      
+      if (!res.success) {
+        throw new Error(res.error || 'Gagal menghapus transaksi.');
+      }
+
+      append({
+        role: 'user',
+        content: `Saya telah mengonfirmasi penghapusan transaksi dengan ID ${txId}. Transaksi berhasil dihapus dan saldo sudah dikembalikan.`
+      });
+
+      return true;
+    } catch (err) {
+      console.error('Error deleting transaction:', err);
+      throw err;
+    }
+  };
+
+  const handleUpdateTransaction = async (txId: string, data: any) => {
+    try {
+      const { actionUpdateTransaction } = await import('@/lib/actions');
+      const res = await actionUpdateTransaction({
+        id: txId,
+        amount: data.amount,
+        description: data.description,
+        categoryId: data.categoryId,
+        date: data.date
+      });
+      
+      if (!res.success) {
+        throw new Error(res.error || 'Gagal mengubah transaksi.');
+      }
+
+      append({
+        role: 'user',
+        content: `Saya telah mengonfirmasi perubahan pada transaksi (ID: ${txId}) menjadi nominal Rp ${data.amount.toLocaleString('id-ID')} dengan deskripsi "${data.description}". Perubahan sudah tersimpan di database.`
+      });
+
+      return true;
+    } catch (err) {
+      console.error('Error updating transaction:', err);
+      throw err;
+    }
+  };
+
+  const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages, error, setInput, append, reload } = useChat({
     api: '/api/chat',
     body: { sessionId: currentSessionId },
     initialMessages: [],
     maxSteps: 5
   });
+
+  const [profileName, setProfileName] = useState<'silva' | 'yoga'>('silva');
+
+  useEffect(() => {
+    const getCookie = (name: string) => {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop()?.split(';').shift();
+      return undefined;
+    };
+    const p = getCookie('current_profile');
+    if (p === 'silva' || p === 'yoga') {
+      setProfileName(p);
+    }
+  }, []);
 
   const [isInitializing, setIsInitializing] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -876,7 +1236,17 @@ export default function AiChatInterface() {
       const res = await fetch(`/api/chat/history?sessionId=${sessionId}`);
       if (res.ok) {
         const data = await res.json();
-        setMessages(data.messages || []);
+        if (data.messages && data.messages.length > 0) {
+          setMessages(data.messages);
+        } else {
+          setMessages([
+            {
+              id: 'welcome',
+              role: 'assistant',
+              content: `Halo ${profileName === 'yoga' ? 'Yoga' : 'Silva'}, saya Opin AI Financial Advisor Anda. Ada yang ingin Anda simulasikan atau diskusikan hari ini?`
+            }
+          ]);
+        }
         setTimeout(scrollToBottom, 50);
         setTimeout(scrollToBottom, 150);
         setTimeout(scrollToBottom, 350);
@@ -905,7 +1275,7 @@ export default function AiChatInterface() {
               {
                 id: 'welcome',
                 role: 'assistant',
-                content: 'Selamat pagi, Yoga. Saya telah menganalisis profil keuangan Anda. Apakah Anda ingin mendiskusikan rencana pembelian aset baru atau melakukan evaluasi terhadap dana darurat Anda hari ini?'
+                content: `Halo ${profileName === 'yoga' ? 'Yoga' : 'Silva'}, saya Opin AI Financial Advisor Anda. Ada yang ingin Anda simulasikan atau diskusikan hari ini?`
               }
             ]);
           }
@@ -919,7 +1289,7 @@ export default function AiChatInterface() {
     }
 
     fetchHistoryAndSessions();
-  }, [setMessages]);
+  }, [setMessages, profileName]);
 
   const handleScroll = () => {
     if (!chatCanvasRef.current) return;
@@ -955,7 +1325,7 @@ export default function AiChatInterface() {
       {
         id: 'welcome',
         role: 'assistant',
-        content: 'Selamat pagi, Yoga. Saya telah menganalisis profil keuangan Anda. Apakah Anda ingin mendiskusikan rencana pembelian aset baru atau melakukan evaluasi terhadap dana darurat Anda hari ini?'
+        content: `Halo ${profileName === 'yoga' ? 'Yoga' : 'Silva'}, saya Opin AI Financial Advisor Anda. Ada yang ingin Anda simulasikan atau diskusikan hari ini?`
       }
     ]);
     setSessionsList(prev => [
@@ -989,135 +1359,184 @@ export default function AiChatInterface() {
 
   return (
     <div className="flex h-full w-full bg-white relative overflow-hidden">
-      {/* Sessions Sidebar */}
+      {/* 1. Sidebar / Panel Samping (Kiri) */}
       <aside className={`
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-        fixed z-20 top-0 left-0 md:left-64 w-64 h-full border-r border-slate-200 bg-[#f7f9fb] transition-transform duration-300 ease-in-out flex flex-col shrink-0
+        fixed md:relative z-40 md:z-auto top-0 left-0 h-full border-r border-slate-200/70 bg-[#f0f4f9] transition-all duration-200 ease-out transform-gpu flex flex-col shrink-0
+        ${sidebarOpen 
+          ? 'w-64 translate-x-0 shadow-2xl md:shadow-none' 
+          : '-translate-x-full md:translate-x-0 md:w-0 md:border-0 md:overflow-hidden shadow-none'}
       `}>
-        {/* Sidebar Header with Obrolan Baru */}
-        <div className="p-4 border-b border-slate-200/80 flex items-center justify-between shrink-0">
+        {/* Top: + Chat Baru */}
+        <div className="p-3.5 border-b border-slate-200/60 flex items-center justify-between shrink-0 min-w-[256px]">
           <button 
             onClick={handleNewChat}
-            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-black text-white hover:bg-black/90 active:scale-95 transition-all text-xs font-bold rounded-lg shadow-sm"
+            className="flex-1 flex items-center justify-start gap-2.5 py-2.5 px-4 bg-[#dde3ea] hover:bg-[#d0d7de] text-slate-800 transition-all text-xs font-semibold rounded-full shadow-2xs active:scale-95"
           >
-            <Plus className="h-4 w-4" />
-            <span>Obrolan Baru</span>
+            <Plus className="h-4 w-4 text-slate-700" />
+            <span>Chat Baru</span>
           </button>
         </div>
 
-        {/* Sessions list */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-1.5 scrollbar-hide">
+        {/* Gems / Custom Financial AI */}
+        <div className="p-3 border-b border-slate-200/60 shrink-0 min-w-[256px] space-y-1">
+          <p className="px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Gems Financial AI</p>
+          <div 
+            onClick={() => {
+              setInput('Tolong simulasikan rencana tabungan bulanan saya.');
+              if (textareaRef.current) textareaRef.current.focus();
+            }}
+            className="flex items-center gap-2 px-3 py-2 rounded-full text-xs text-slate-700 hover:bg-[#e1e6ed] cursor-pointer transition-colors font-medium"
+          >
+            <span className="text-sm">💎</span>
+            <span className="truncate">Simulasi Tabungan</span>
+          </div>
+          <div 
+            onClick={() => {
+              cameraInputRef.current?.click();
+            }}
+            className="flex items-center gap-2 px-3 py-2 rounded-full text-xs text-slate-700 hover:bg-[#e1e6ed] cursor-pointer transition-colors font-medium"
+          >
+            <span className="text-sm">🧾</span>
+            <span className="truncate">Pemindai Struk OCR</span>
+          </div>
+          <div 
+            onClick={() => {
+              setInput('Apakah dana darurat saya saat ini sudah aman?');
+              if (textareaRef.current) textareaRef.current.focus();
+            }}
+            className="flex items-center gap-2 px-3 py-2 rounded-full text-xs text-slate-700 hover:bg-[#e1e6ed] cursor-pointer transition-colors font-medium"
+          >
+            <span className="text-sm">📊</span>
+            <span className="truncate">Evaluasi Dana Darurat</span>
+          </div>
+        </div>
+
+        {/* Recent / Riwayat Chat */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-1 scrollbar-hide min-w-[256px]">
+          <p className="px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Riwayat Obrolan</p>
           {sessions.map(s => {
             const isActive = s.id === currentSessionId;
             return (
               <div 
                 key={s.id}
                 onClick={async () => {
-                  setCurrentSessionId(s.id);
-                  await loadSessionMessages(s.id);
-                  if (window.innerWidth < 768) {
-                    setSidebarOpen(false);
+                  if (s.id !== currentSessionId) {
+                    setCurrentSessionId(s.id);
+                    if (window.innerWidth < 768) {
+                      setSidebarOpen(false);
+                    }
+                    await loadSessionMessages(s.id);
                   }
                 }}
                 className={`
-                  group flex items-center justify-between rounded-lg px-3 py-2.5 text-[13px] transition-all cursor-pointer border-r-2
+                  group flex items-center justify-between rounded-full px-3.5 py-2 text-xs transition-all cursor-pointer
                   ${isActive 
-                    ? 'bg-slate-200/70 text-black border-black font-bold' 
-                    : 'hover:bg-slate-200/30 text-slate-500 hover:text-black border-transparent font-medium'}
+                    ? 'bg-[#d3e3fd] text-[#041e49] font-bold' 
+                    : 'hover:bg-[#e1e6ed] text-slate-700 font-medium'}
                 `}
               >
                 <div className="flex items-center gap-2 truncate flex-1 pr-1">
-                  <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-black' : 'text-slate-400'}`} />
+                  <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-[#041e49]' : 'text-slate-400'}`} />
                   <span className="truncate">{s.title || 'Obrolan Baru'}</span>
                 </div>
-                {s.id !== 'default' && (
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteSession(s.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 hover:bg-slate-200 p-1 rounded transition-all shrink-0 hover:text-red-600"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                )}
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteSession(s.id);
+                  }}
+                  className="text-slate-400 hover:text-red-600 hover:bg-slate-300/50 p-1 rounded-full transition-all shrink-0"
+                  title="Hapus Obrolan"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
             );
           })}
         </div>
+
+        {/* Bottom Menu: Aktivitas & Bantuan */}
+        <div className="p-3 border-t border-slate-200/60 shrink-0 min-w-[256px] space-y-0.5 text-xs text-slate-600">
+          <div className="flex items-center gap-2.5 px-3 py-2 rounded-full hover:bg-[#e1e6ed] cursor-pointer transition-colors">
+            <Settings className="w-4 h-4 text-slate-500" />
+            <span>Setelan & Tema</span>
+          </div>
+          <div className="flex items-center gap-2.5 px-3 py-2 rounded-full hover:bg-[#e1e6ed] cursor-pointer transition-colors">
+            <HelpCircle className="w-4 h-4 text-slate-500" />
+            <span>Bantuan & Aktivitas</span>
+          </div>
+        </div>
       </aside>
 
-      {/* Overlay for sidebar */}
+      {/* Overlay for sidebar (Mobile only) */}
       {sidebarOpen && (
         <div 
-          className="fixed inset-0 z-10 bg-black/10 backdrop-blur-xs"
+          className="fixed inset-0 z-30 bg-slate-900/30 md:hidden transition-opacity duration-200"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-white relative">
-        {/* Top App Bar */}
-        <header className="h-16 border-b border-[#c6c6cd] px-4 sm:px-6 flex items-center justify-between sticky top-0 z-10 bg-white/85 backdrop-blur-md shrink-0">
+        {/* 2. Top Bar / Baris Atas */}
+        <header className="h-16 border-b border-slate-200/70 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-10 bg-white/90 backdrop-blur-md shrink-0">
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors"
-              title="Menu Obrolan"
+              className="p-2 hover:bg-[#f0f4f9] rounded-full text-slate-600 transition-colors"
+              title="Toggle Sidebar"
             >
               <Menu className="h-5 w-5" />
             </button>
-            <div className="flex items-center gap-2">
-              <Bot className="text-black h-5.5 w-5.5" />
-              <h2 className="text-base sm:text-lg font-bold text-black tracking-tight">AI Financial Advisor</h2>
-            </div>
+
+            {/* Pemilih Model (Gemini Model Selector Pill) */}
+            <button className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#f0f4f9] hover:bg-[#e1e6ed] text-slate-800 text-xs font-bold transition-all border border-slate-200/60 shadow-2xs">
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              <span>Opin AI (Gemini 1.5 Flash)</span>
+              <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
+            </button>
           </div>
-          <div className="flex items-center gap-3.5">
+
+          <div className="flex items-center gap-3">
             <button 
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="flex items-center gap-1.5 text-slate-500 hover:text-black transition-colors text-xs font-semibold"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#f0f4f9] hover:bg-[#e1e6ed] text-slate-700 transition-all text-xs font-bold active:scale-95 border border-slate-200/50"
             >
-              <RefreshCw className="h-3.5 w-3.5" />
-              <span>History</span>
+              <RefreshCw className="h-3.5 w-3.5 text-slate-500" />
+              <span className="hidden sm:inline">Riwayat</span>
             </button>
-            <div className="h-4 w-px bg-slate-300"></div>
-            <button className="flex items-center gap-1.5 text-slate-500 hover:text-black transition-colors">
-              <svg xmlns="http://www.w3.org/2008/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-            </button>
+
+            {/* User Profile Avatar */}
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 text-white font-extrabold text-xs flex items-center justify-center shadow-xs cursor-pointer uppercase" title={`Profil Aktif: ${profileName}`}>
+              {profileName.charAt(0)}
+            </div>
           </div>
         </header>
 
         {isInitializing || isLoadingMessages ? (
           <div className="flex-1 flex flex-col items-center justify-center space-y-3 bg-[#f8fafc]">
-            <Loader2 className="h-8 w-8 animate-spin text-black" />
-            <p className="text-sm text-[#76777d]">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <p className="text-sm text-slate-500 font-medium">
               {isLoadingMessages ? 'Memuat pesan...' : 'Memuat riwayat obrolan...'}
             </p>
           </div>
         ) : (
           <>
-            {/* Chat Canvas */}
-            <section ref={chatCanvasRef} onScroll={handleScroll} className="flex-1 overflow-y-auto w-full min-w-0 p-3.5 sm:p-6 bg-white scrollbar-hide flex flex-col justify-start">
+            {/* 3. Main Canvas / Area Percakapan (Tengah) */}
+            <section ref={chatCanvasRef} onScroll={handleScroll} className="flex-1 overflow-y-auto w-full min-w-0 p-4 sm:p-8 bg-white scrollbar-hide flex flex-col justify-start">
               {showSuggestions ? (
-                /* Centered Welcome Page (ChatGPT Style) */
+                /* Gemini Welcome Page */
                 <div className="flex-1 flex flex-col items-center justify-center max-w-3xl mx-auto px-4 py-8 sm:py-16 w-full my-auto">
-                  {/* Bot Icon with Pulse Aura */}
-                  <div className="relative mb-5 shrink-0">
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-black text-white flex items-center justify-center shadow-md relative z-10">
-                      <Bot className="h-6 w-6 sm:h-7 sm:w-7" />
-                    </div>
-                    <div className="absolute inset-0 rounded-full bg-black/10 animate-ping" />
-                  </div>
-
-                  {/* Greetings */}
-                  <h3 className="text-xl sm:text-2xl font-bold text-black text-center tracking-tight mb-2">
-                    Halo, Yoga 👋
+                  {/* Gemini Gradient Headline */}
+                  <h3 className="text-3xl sm:text-4xl font-bold tracking-tight text-center mb-2">
+                    <span className="bg-gradient-to-r from-[#4285f4] via-[#9b51e0] to-[#ea4335] bg-clip-text text-transparent capitalize">
+                      Halo, {profileName === 'yoga' ? 'Yoga' : 'Silva'}
+                    </span>
                   </h3>
-                  <p className="text-xs sm:text-sm text-slate-500 text-center max-w-md mb-8 leading-relaxed font-medium">
-                    Saya Opin, AI Financial Advisor pribadi kamu. Bagaimana kondisi keuangan kamu hari ini? Silakan tanya apa saja atau pilih saran topik di bawah:
+                  <p className="text-base sm:text-xl font-medium text-slate-400 text-center mb-10">
+                    Bagaimana kondisi keuangan kamu hari ini?
                   </p>
 
-                  {/* Suggestion Grid */}
+                  {/* Suggestion Grid (Gemini Style) */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full">
                     {SUGGESTIONS.map((s, idx) => (
                       <div 
@@ -1126,13 +1545,13 @@ export default function AiChatInterface() {
                           setInput(s.prompt);
                           if (textareaRef.current) textareaRef.current.focus();
                         }}
-                        className="p-4 border border-slate-200/80 hover:border-black rounded-xl bg-slate-55 hover:bg-slate-100/50 cursor-pointer transition-all duration-200 group active:scale-[0.98] shadow-xs"
+                        className="p-4 rounded-2xl bg-[#f0f4f9] hover:bg-[#e1e6ed] cursor-pointer transition-all border border-transparent hover:border-slate-300/40 shadow-2xs group active:scale-[0.98]"
                       >
-                        <h4 className="font-bold text-[12px] sm:text-xs text-black transition-colors flex items-center gap-2">
-                          <MessageSquare className="h-3.5 w-3.5 text-slate-400 group-hover:text-black transition-colors shrink-0" />
+                        <h4 className="font-bold text-xs sm:text-[13px] text-slate-800 group-hover:text-blue-600 transition-colors flex items-center gap-2">
+                          <MessageSquare className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600 transition-colors shrink-0" />
                           {s.title}
                         </h4>
-                        <p className="text-[11px] sm:text-[12px] text-slate-500 mt-1.5 leading-relaxed">{s.desc}</p>
+                        <p className="text-[11px] sm:text-xs text-slate-500 mt-2 leading-relaxed font-normal">{s.desc}</p>
                       </div>
                     ))}
                   </div>
@@ -1147,30 +1566,48 @@ export default function AiChatInterface() {
                       isStreaming={isLoading && idx === messages.length - 1 && message.role === 'assistant'}
                       categories={categories}
                       onSaveTransaction={handleSaveReceiptTransaction}
+                      onDeleteTransaction={handleDeleteTransaction}
+                      onUpdateTransaction={handleUpdateTransaction}
                     />
                   ))}
                   
                   {isLoading && messages[messages.length - 1]?.role === 'user' && (
                     <div className="flex gap-4 group">
-                      <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center shrink-0 mt-1">
-                        <Bot className="h-4.5 w-4.5" />
+                      <div className="w-8 h-8 rounded-full bg-[#f0f4f9] text-blue-600 flex items-center justify-center shrink-0 mt-1 border border-slate-200/60">
+                        <Sparkles className="h-4 w-4 animate-spin text-blue-600" />
                       </div>
                       <div className="flex-1">
-                        <div className="bg-[#f8fafc] border border-slate-200/60 rounded-xl p-5 flex items-center gap-2 max-w-[85%]">
-                          <Loader2 className="h-4 w-4 animate-spin text-black" />
-                          <span className="text-xs text-[#76777d] font-semibold">Menganalisis...</span>
+                        <div className="bg-[#f0f4f9] border border-slate-200/60 rounded-2xl p-4 flex items-center gap-2 max-w-[85%]">
+                          <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                          <span className="text-xs text-slate-600 font-semibold">Menganalisis...</span>
                         </div>
+                  {/* Error display */}
+                  {error && (
+                    <div className="p-3.5 my-2 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-xs space-y-2 max-w-xl mx-auto shadow-2xs animate-fade-in">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold flex items-center gap-1.5 text-red-800">
+                          ⚠️ Terjadi Gangguan Koneksi AI
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => reload()}
+                          className="px-3 py-1 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-semibold rounded-full text-[11px] transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          <span>Coba Lagi</span>
+                        </button>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-red-600">
+                        {error.message?.includes('Quota exceeded') || error.message?.includes('429') 
+                          ? 'Batas penggunaan AI gratis (Google/GitHub API Quota) Anda sedang padat. Silakan klik "Coba Lagi" di atas atau tunggu beberapa detik.' 
+                          : error.message || 'Gagal tersambung ke server AI. Klik tombol Coba Lagi di atas untuk mengirim ulang.'}
+                      </p>
+                    </div>
+                  )}
                       </div>
                     </div>
                   )}
                   
-                  {error && (
-                    <div className="p-4 text-sm text-red-750 bg-red-50 border border-red-200 rounded-xl max-w-4xl mx-auto">
-                      {error.message.includes('Quota exceeded') || error.message.includes('429') 
-                        ? 'Batas penggunaan AI gratis (Google Quota) Anda telah habis karena terlalu banyak request. Mohon tunggu sekitar 1 menit sebelum bertanya lagi.' 
-                        : 'Terjadi gangguan koneksi ke server AI. Silakan coba beberapa saat lagi.'}
-                    </div>
-                  )}
                   <div ref={messagesEndRef} />
                 </div>
               )}
@@ -1184,19 +1621,19 @@ export default function AiChatInterface() {
                   scrollToBottom();
                   setShowScrollButton(false);
                 }}
-                className="absolute bottom-28 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-4 py-2 rounded-full bg-black text-white hover:bg-black/90 active:scale-95 shadow-md border border-slate-800 text-[11px] font-bold tracking-wide transition-all animate-bounce"
+                className="absolute bottom-28 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-900 text-white hover:bg-black active:scale-95 shadow-md border border-slate-800 text-[11px] font-bold tracking-wide transition-all animate-bounce"
               >
                 <ChevronDown className="h-3.5 w-3.5" />
                 <span>Pesan Terbaru</span>
               </button>
             )}
 
-            {/* Message Input Area */}
-            <footer className="p-3 sm:p-6 border-t border-[#c6c6cd] bg-white shrink-0">
+            {/* 4. Prompt Box / Kotak Input (Bawah - Gemini Style) */}
+            <footer className="p-3 sm:p-5 bg-white shrink-0">
               <div className="max-w-4xl mx-auto">
                 <form 
                   onSubmit={handleFormSubmit}
-                  className="flex flex-col gap-1.5 p-2 sm:p-3 border border-[#c6c6cd] rounded-xl bg-[#f7f9fb] focus-within:bg-white focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all shadow-sm"
+                  className="flex flex-col gap-1.5 p-2.5 sm:p-3.5 border border-transparent bg-[#f0f4f9] focus-within:bg-white focus-within:border-slate-300 focus-within:shadow-md rounded-[28px] transition-all shadow-2xs"
                 >
                   <input 
                     type="file"
@@ -1219,14 +1656,14 @@ export default function AiChatInterface() {
 
                   {/* Attachments Preview */}
                   {attachments.length > 0 && (
-                    <div className="flex flex-wrap gap-2 p-2 border-b border-slate-200 w-full mb-2">
+                    <div className="flex flex-wrap gap-2 p-2 border-b border-slate-200/80 w-full mb-1">
                       {attachments.map((att, idx) => (
-                        <div key={idx} className="relative w-14 h-14 rounded-lg overflow-hidden border border-slate-200 bg-slate-100 group shadow-xs">
+                        <div key={idx} className="relative w-14 h-14 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 group shadow-xs">
                           <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
                           <button
                             type="button"
                             onClick={() => removeAttachment(idx)}
-                            className="absolute top-0.5 right-0.5 bg-black/60 hover:bg-black text-white p-0.5 rounded-full shadow-xs active:scale-90 transition-all flex items-center justify-center"
+                            className="absolute top-1 right-1 bg-slate-900/80 hover:bg-slate-900 text-white p-1 rounded-full shadow-xs active:scale-90 transition-all flex items-center justify-center"
                           >
                             <svg xmlns="http://www.w3.org/2008/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
                               <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -1237,14 +1674,14 @@ export default function AiChatInterface() {
                     </div>
                   )}
 
-                  <div className="flex items-end gap-3 w-full">
+                  <div className="flex items-end gap-2.5 w-full">
                     {/* Attachment Popover Trigger */}
-                    <div className="relative shrink-0">
+                    <div className="relative shrink-0 mb-0.5">
                       <button 
                         type="button" 
                         onClick={() => setAttachMenuOpen(!attachMenuOpen)}
-                        className={`p-2 rounded-lg transition-all shrink-0 flex items-center justify-center ${
-                          attachMenuOpen ? 'bg-black text-white' : 'text-[#76777d] hover:text-black hover:bg-slate-100'
+                        className={`p-2 rounded-full transition-all shrink-0 flex items-center justify-center ${
+                          attachMenuOpen ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-[#e1e6ed]'
                         }`}
                         title="Lampirkan Foto atau Struk"
                       >
@@ -1258,14 +1695,14 @@ export default function AiChatInterface() {
                             className="fixed inset-0 z-20" 
                             onClick={() => setAttachMenuOpen(false)} 
                           />
-                          <div className="absolute bottom-12 left-0 z-30 w-52 bg-white border border-slate-200 rounded-xl shadow-xl p-1.5 space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                          <div className="absolute bottom-12 left-0 z-30 w-52 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
                             <button
                               type="button"
                               onClick={() => {
                                 cameraInputRef.current?.click();
                                 setAttachMenuOpen(false);
                               }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors text-left"
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors text-left"
                             >
                               <Camera className="w-4 h-4 text-blue-600 shrink-0" />
                               <span>Ambil Foto (Kamera)</span>
@@ -1276,7 +1713,7 @@ export default function AiChatInterface() {
                                 fileInputRef.current?.click();
                                 setAttachMenuOpen(false);
                               }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg transition-colors text-left"
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-600 rounded-xl transition-colors text-left"
                             >
                               <ImageIcon className="w-4 h-4 text-emerald-600 shrink-0" />
                               <span>Pilih dari Galeri</span>
@@ -1288,7 +1725,7 @@ export default function AiChatInterface() {
                     
                     <textarea
                       ref={textareaRef}
-                      className="flex-1 py-2 px-0 bg-transparent border-none focus:ring-0 resize-none font-medium text-[13px] sm:text-[14px] max-h-32 min-h-[40px] outline-none scrollbar-hide text-[#191c1e] placeholder-[#76777d]"
+                      className="flex-1 py-2 px-1 bg-transparent border-none focus:ring-0 resize-none font-medium text-[13px] sm:text-sm max-h-32 min-h-[40px] outline-none scrollbar-hide text-slate-800 placeholder:text-slate-400"
                       placeholder="Tanyakan soal saldo, target nabung, atau tips hemat..."
                       value={input}
                       onChange={handleInputChange}
@@ -1304,31 +1741,31 @@ export default function AiChatInterface() {
                       rows={1}
                     />
                     
-                    <div className="flex items-center gap-1 px-2 pb-1 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0 mb-0.5">
                       <button 
                         type="button" 
                         onClick={toggleListening}
                         className={`p-2 rounded-full transition-all shrink-0 ${
                           isListening 
-                            ? 'bg-red-500 text-white animate-pulse shadow-md scale-110' 
-                            : 'text-[#76777d] hover:text-black hover:bg-slate-100'
+                            ? 'bg-red-500 text-white animate-pulse shadow-md scale-105' 
+                            : 'text-slate-500 hover:bg-[#e1e6ed]'
                         }`}
                         title={isListening ? "Sedang merekam (klik untuk selesai)..." : "Masukkan suara (Mic)"}
                       >
-                        <svg xmlns="http://www.w3.org/2008/svg" viewBox="0 0 24 24" fill={isListening ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                        <svg xmlns="http://www.w3.org/2008/svg" viewBox="0 0 24 24" fill={isListening ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4.5 h-4.5"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
                       </button>
                       <button 
                         type="submit"
                         disabled={isLoading || (!input.trim() && attachments.length === 0)}
-                        className="w-10 h-10 bg-black text-white flex items-center justify-center rounded transition-transform active:scale-95 shadow-lg disabled:opacity-50 disabled:active:scale-100"
+                        className="w-9 h-9 sm:w-10 sm:h-10 bg-slate-900 hover:bg-black text-white flex items-center justify-center rounded-full transition-all shadow-xs disabled:opacity-30 active:scale-95"
                       >
-                        <Send className="w-4 h-4 ml-0.5" />
+                        <Send className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
                 </form>
-                <p className="text-center text-[10px] text-[#76777d] mt-4 uppercase tracking-tighter">
-                  AI dapat melakukan kesalahan. Selalu periksa kembali perhitungan manual jika menyangkut keputusan besar.
+                <p className="text-center text-[10px] text-slate-400 mt-3 font-medium">
+                  Opin AI (Gemini) dapat melakukan kesalahan. Selalu periksa kembali perhitungan manual jika menyangkut keputusan besar.
                 </p>
               </div>
             </footer>

@@ -210,6 +210,18 @@ export async function POST(req: Request) {
 ${Array.isArray(userParams.expenses?.customExpenses) && userParams.expenses.customExpenses.length > 0 ? userParams.expenses.customExpenses.map((c: any) => `  * 🏷️ ${c.name}: **${formatRp(c.amount || 0)}**`).join('\n') : ''}
 ` : '';
 
+    // Memori Personal
+    const memories = simulator?.state?.memories || [];
+    const activeMemories = memories.filter((m: any) => m.active);
+    const memoryPrompt = activeMemories.length > 0 ? `
+## MEMORI & PREFERENSI PENGGUNA
+Ingat dan patuhi catatan berikut ini mengenai pengguna secara ketat:
+${activeMemories.map((m: any) => `- [${m.category} - ID: ${m.id}] ${m.content}`).join('\n')}
+
+**ATURAN PENTING TERKAIT MEMORI:**
+Jika pengguna menyuruh Anda mencatat sebuah transaksi NAMUN transaksi tersebut bertentangan atau melanggar preferensi/batasan/target pengeluaran yang tercatat di Memori, Anda **WAJIB menunda** pencatatan! Berikan peringatan terlebih dahulu via teks, ingatkan mereka tentang memori tersebut, dan tanyakan apakah mereka **tetap yakin** ingin mencatatnya. JANGAN panggil tool \`add_transaction\` sampai mereka secara eksplisit menjawab konfirmasi peringatan Anda (misal: "Ya, tetap catat").
+` : '';
+
     // Ringkasan transaksi terbaru
     const recentSummary = allTransactions.length > 0
       ? `\n## TRANSAKSI TERBARU (Maksimal 30):\n` +
@@ -232,6 +244,7 @@ Waktu & tanggal saat ini: ${now}
 
 # SNAPSHOT KEUANGAN PENGGUNA
 ${userParamsSummary}
+${memoryPrompt}
 
 ## Rekening
 ${accounts.length > 0
@@ -547,6 +560,10 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
       '  3. **Penting**: Jangan pernah memanggil tool `add_transaction` secara langsung untuk struk belanja. Proses pencatatan struk harus melalui tool `extract_receipt_data` terlebih dahulu agar pengguna dapat memverifikasi datanya lewat kartu konfirmasi di UI.\n' +
       '  4. Gunakan format mata uang Rupiah Indonesia: nominal berupa angka bulat bulat (integer) tanpa titik/koma desimal.\n' +
       '  5. Setelah memanggil `extract_receipt_data` dan menerima hasilnya, sampaikan penjelasan ramah bahwa draf data struk belanja telah berhasil diekstrak dan minta pengguna untuk memeriksa dan menyimpannya melalui kartu konfirmasi yang muncul di bawah obrolan.\n\n' +
+      '## FITUR PENCARIAN WEB (WEB SEARCH / ACCESS INTERNET)\n' +
+      '- Kamu memiliki akses ke internet secara real-time via tool `web_search`.\n' +
+      '- Jika pengguna menanyakan info publik/terkini (misal: harga barang/gadget terbaru, kurs mata uang USD/IDR, harga emas, inflasi, suku bunga BI, berita ekonomi/pasar, promo, promo bank, atau perbandingan harga produk di Indonesia), kamu WAJIB memanggil `web_search` untuk mencari data terkini sebelum menjawab.\n' +
+      '- Gunakan hasil dari `web_search` untuk memberikan jawaban yang akurat, mutakhir, dan relevan.\n\n' +
       '## ATURAN PEMICU AKSI (WAJIB DIPATUHI)\n' +
       'Kamu HANYA boleh memanggil function/tool add_transaction, delete_transaction, create_transfer, atau add_saving_goal jika pesan user mengandung KATA KERJA IMPERATIF eksplisit yang secara langsung memerintahkan aksi, contoh: "catat", "tambahkan", "masukkan", "input", "simpan", "hapus", "batalkan", "hilangkan", "transfer", "pindahkan", "buat target". *Khusus untuk pemindaian struk belanja di atas, kamu berhak memanggil tool `extract_receipt_data` secara otomatis tanpa perlu perintah teks tambahan.*\n\n' +
       'Untuk tool `search_transactions`, kamu **DIPERBOLEHKAN** memanggilnya kapan saja pengguna menanyakan tentang riwayat pengeluaran masa lalu, total pembelian barang tertentu (misal: "berapa kali saya beli jago?"), atau mencari transaksi lama, bahkan tanpa kata kerja imperatif.\n\n' +
@@ -576,6 +593,123 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
     };
 
     const chatTools = {
+      web_search: tool({
+        description: 'Mencari informasi terkini dari internet (Web Search) seperti harga gadget/barang terbaru, kurs Rupiah/Valas, harga emas, inflasi, suku bunga bank, berita pasar/keuangan, promo, atau informasi publik lainnya.',
+        parameters: jsonSchema({
+          type: 'object',
+          properties: {
+            query: { 
+              type: 'string', 
+              description: 'Kata kunci pencarian yang spesifik (contoh: "harga iPhone 15 Pro Indonesia", "kurs USD ke IDR hari ini", "suku bunga BI rate terbaru").' 
+            }
+          },
+          required: ['query']
+        }),
+        execute: async ({ query }: any) => {
+          try {
+            console.log(`[Web Search Tool] Searching: "${query}"`);
+            const results: Array<{ source: string; title: string; snippet: string; url?: string }> = [];
+
+            const fetchWithTimeout = async (url: string, options: any = {}, timeoutMs = 3500) => {
+              const controller = new AbortController();
+              const id = setTimeout(() => controller.abort(), timeoutMs);
+              try {
+                const res = await fetch(url, { ...options, signal: controller.signal });
+                clearTimeout(id);
+                return res;
+              } catch (err) {
+                clearTimeout(id);
+                throw err;
+              }
+            };
+
+            // Engine 1: Google News RSS Search (Super fast, real-time market prices & news)
+            try {
+              const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=id&gl=ID&ceid=ID:id`;
+              const res = await fetchWithTimeout(rssUrl, {}, 3000);
+              if (res.ok) {
+                const xml = await res.text();
+                const itemMatches = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+                for (let i = 0; i < Math.min(itemMatches.length, 5); i++) {
+                  const item = itemMatches[i];
+                  const titleMatch = item.match(/<title>([\s\S]*?)<\/title>/);
+                  const pubDateMatch = item.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
+                  const linkMatch = item.match(/<link>([\s\S]*?)<\/link>/);
+                  if (titleMatch) {
+                    const cleanTitle = titleMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').replace(/<[^>]*>/g, '').trim();
+                    results.push({
+                      source: 'Berita & Berkas Publik',
+                      title: cleanTitle,
+                      snippet: pubDateMatch ? `Update: ${pubDateMatch[1]}` : cleanTitle,
+                      url: linkMatch ? linkMatch[1] : undefined
+                    });
+                  }
+                }
+              }
+            } catch (e: any) {
+              console.log('[Web Search Engine 1 Error]:', e.message);
+            }
+
+            // Engine 2: Yahoo News Search RSS
+            try {
+              const yahooUrl = `https://news.search.yahoo.com/rss?p=${encodeURIComponent(query)}`;
+              const res = await fetchWithTimeout(yahooUrl, {}, 3000);
+              if (res.ok) {
+                const xml = await res.text();
+                const itemMatches = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+                for (let i = 0; i < Math.min(itemMatches.length, 3); i++) {
+                  const item = itemMatches[i];
+                  const titleMatch = item.match(/<title>([\s\S]*?)<\/title>/);
+                  const descMatch = item.match(/<description>([\s\S]*?)<\/description>/);
+                  if (titleMatch) {
+                    const cleanTitle = titleMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').replace(/<[^>]*>/g, '').trim();
+                    const cleanDesc = descMatch ? descMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').replace(/<[^>]*>/g, '').trim() : '';
+                    results.push({
+                      source: 'Yahoo Web Search',
+                      title: cleanTitle,
+                      snippet: cleanDesc || cleanTitle
+                    });
+                  }
+                }
+              }
+            } catch (e: any) {
+              console.log('[Web Search Engine 2 Error]:', e.message);
+            }
+
+            // Engine 3: Wikipedia Indonesia Search API
+            try {
+              const wikiUrl = `https://id.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
+              const res = await fetchWithTimeout(wikiUrl, {}, 2500);
+              if (res.ok) {
+                const json = await res.json();
+                const wikiItems = json?.query?.search || [];
+                for (let i = 0; i < Math.min(wikiItems.length, 3); i++) {
+                  const item = wikiItems[i];
+                  const cleanSnippet = item.snippet.replace(/<[^>]*>/g, '').trim();
+                  results.push({
+                    source: 'Wikipedia ID',
+                    title: item.title,
+                    snippet: cleanSnippet,
+                    url: `https://id.wikipedia.org/wiki/${encodeURIComponent(item.title)}`
+                  });
+                }
+              }
+            } catch (e: any) {
+              console.log('[Web Search Engine 3 Error]:', e.message);
+            }
+
+            if (results.length > 0) {
+              return { success: true, query, results };
+            }
+
+            return { success: false, query, message: 'Pencarian web tidak menemukan hasil spesifik.' };
+          } catch (err: any) {
+            console.error('[Web Search Tool Error]:', err);
+            return { success: false, query, error: err.message };
+          }
+        }
+      }),
+
       extract_receipt_data: tool({
         description: 'Mengekstrak data terstruktur dari gambar struk belanja yang diunggah oleh pengguna. Tool ini HANYA mengembalikan data draf hasil OCR tanpa menyimpannya ke database langsung. Pastikan amount adalah TOTAL AKHIR yang dibayar (setelah diskon dan termasuk pajak).',
         parameters: jsonSchema({
@@ -720,7 +854,7 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
       }),
 
       add_transaction: tool({
-        description: 'Mencatat transaksi keuangan baru ke database. PANGGIL HANYA jika user memberi perintah eksplisit dengan kata kerja imperatif: \'catat\', \'tambahkan\', \'input\', \'masukkan\', \'simpan\'. JANGAN panggil jika user hanya bercerita/curhat tentang pengeluaran tanpa menyuruh mencatat, atau menyebut angka sebagai bagian dari pertanyaan/simulasi. Jika ragu apakah ini perintah atau curhat, JANGAN panggil function ini — tanya konfirmasi ke user terlebih dahulu via teks.',
+        description: 'Mencatat transaksi keuangan baru ke database. PANGGIL saat pengguna mengonfirmasi untuk mencatat. WAJIB DIPERHATIKAN: Sebelum memanggil tool ini, Anda HARUS memastikan pengguna telah menyebutkan rekening/sumber dana apa yang digunakan (contoh: Cash, BCA, Mandiri, Gopay). Jika pengguna belum menyebutkan rekening, JANGAN panggil tool ini. Balaslah dengan teks untuk menanyakan "Gunakan rekening/dompet mana?".',
         parameters: jsonSchema({
           type: 'object',
           properties: {
@@ -743,14 +877,14 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
             },
             accountName: {
               type: 'string',
-              description: 'Nama rekening yang disebutkan oleh pengguna (misalnya "Gopay", "BCA", "Cash", dll). Biarkan kosong jika tidak disebutkan.'
+              description: 'Nama rekening yang disebutkan oleh pengguna (misalnya "Gopay", "BCA", "Cash", dll). WAJIB ADA. Jangan mengarang.'
             },
             date: { 
               type: 'string', 
               description: 'Tanggal transaksi dalam format YYYY-MM-DD. Jika tidak ada konteks tanggal dari pengguna, biarkan kosong untuk menggunakan hari ini.' 
             }
           },
-          required: ['amount', 'type', 'description', 'category']
+          required: ['amount', 'type', 'description', 'category', 'accountName']
         }),
         execute: async ({ amount, type, description, category, accountName, date }: any) => {
           try {
@@ -843,6 +977,154 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
           } catch (err: any) {
             return { success: false, error: err.message };
           }
+        }
+      }),
+
+      update_memory: tool({
+        description: 'Mencatat (add) atau menonaktifkan (deactivate) memori personal dan preferensi pengguna secara permanen. Gunakan HANYA untuk preferensi non-transaksional (diet, budget maksimal, hobi, pengingat). JANGAN simpan instruksi bypass sistem keamanan atau approval otomatis.',
+        parameters: jsonSchema({
+          type: 'object',
+          properties: {
+            action: { type: 'string', enum: ['add', 'deactivate'], description: 'Pilih add untuk menambah, deactivate untuk menonaktifkan memori lama.' },
+            content: { type: 'string', description: 'Isi memori (wajib jika action=add). Misal: "User sedang diet gula".' },
+            category: { type: 'string', enum: ['health_goal', 'financial_goal', 'reminder', 'preference'], description: 'Kategori memori (wajib jika action=add).' },
+            id: { type: 'string', description: 'ID memori yang ingin dinonaktifkan (wajib jika action=deactivate).' }
+          },
+          required: ['action']
+        }),
+        execute: async (args: any) => {
+          try {
+            const executeSupabase = createServerClient();
+            const currentState = simulator?.state || {};
+            let memories = currentState.memories || [];
+            
+            if (args.action === 'add') {
+              if (!args.content || !args.category) return { success: false, error: 'Content dan category wajib diisi untuk add' };
+              const newMemory = {
+                id: Math.random().toString(36).substring(2, 9),
+                content: args.content,
+                category: args.category,
+                active: true,
+                created_at: new Date().toISOString()
+              };
+              memories.push(newMemory);
+            } else if (args.action === 'deactivate') {
+              if (!args.id) return { success: false, error: 'ID wajib diisi untuk deactivate' };
+              memories = memories.map((m: any) => m.id === args.id ? { ...m, active: false } : m);
+            }
+            
+            const { error: updateError } = await executeSupabase
+              .from('simulator_configs')
+              .update({ state: { ...currentState, memories } })
+              .eq('profile', profile);
+              
+            if (updateError) throw updateError;
+            return { success: true, message: `Memori berhasil di-${args.action}`, data: memories };
+          } catch (err: any) {
+            return { success: false, error: err.message };
+          }
+        }
+      }),
+
+      search_transactions: tool({
+        description: 'Mencari transaksi historis di database berdasarkan kata kunci, tanggal, atau kategori. Berguna untuk menjawab pertanyaan seperti "berapa banyak pengeluaran kopi saya bulan lalu?".',
+        parameters: jsonSchema({
+          type: 'object',
+          properties: {
+            keyword: { type: 'string', description: 'Kata kunci pencarian (opsional).' },
+            date_from: { type: 'string', description: 'Tanggal awal format YYYY-MM-DD (opsional).' },
+            date_to: { type: 'string', description: 'Tanggal akhir format YYYY-MM-DD (opsional).' },
+            category: { type: 'string', description: 'Nama kategori (opsional).' },
+            limit: { type: 'number', description: 'Jumlah maksimal hasil, default 20, max 50.' }
+          }
+        }),
+        execute: async (args: any) => {
+          try {
+            const executeSupabase = createServerClient();
+            let query = executeSupabase
+              .from('transactions')
+              .select('id, amount, description, type, transaction_date, categories!inner(name)')
+              .eq('profile', profile);
+              
+            if (args.keyword) {
+              query = query.ilike('description', `%${args.keyword}%`);
+            }
+            if (args.date_from) {
+              query = query.gte('transaction_date', args.date_from);
+            }
+            if (args.date_to) {
+              query = query.lte('transaction_date', args.date_to);
+            }
+            if (args.category) {
+              query = query.ilike('categories.name', `%${args.category}%`);
+            }
+            
+            const limit = Math.min(args.limit || 20, 50);
+            query = query.order('transaction_date', { ascending: false }).limit(limit);
+            
+            const { data, error } = await query;
+            if (error) throw error;
+            
+            return { 
+              success: true, 
+              message: `Ditemukan ${data?.length || 0} transaksi.`, 
+              data: data?.map((t: any) => ({
+                id: t.id,
+                date: t.transaction_date,
+                amount: t.amount,
+                type: t.type,
+                description: t.description,
+                category: t.categories?.name
+              }))
+            };
+          } catch (err: any) {
+            return { success: false, error: err.message };
+          }
+        }
+      }),
+
+      prepare_delete_transaction: tool({
+        description: 'Mempersiapkan penghapusan transaksi. JANGAN panggil fungsi ini jika belum memiliki ID transaksi. Gunakan search_transactions dulu. PENTING: Setelah memanggil tool ini, beri tahu pengguna untuk mengklik tombol konfirmasi Hapus di layar. JANGAN PERNAH berkata bahwa transaksi telah dihapus, karena tool ini HANYA menampilkan kartu konfirmasi!',
+        parameters: jsonSchema({
+          type: 'object',
+          properties: {
+            transactionId: { type: 'string', description: 'ID transaksi yang akan dihapus.' }
+          },
+          required: ['transactionId']
+        }),
+        execute: async ({ transactionId }: any) => {
+          const executeSupabase = createServerClient();
+          const { data, error } = await executeSupabase
+            .from('transactions')
+            .select('*, categories(name)')
+            .eq('id', transactionId)
+            .single();
+          if (error) return { success: false, error: error.message };
+          return { success: true, draft: data };
+        }
+      }),
+
+      prepare_update_transaction: tool({
+        description: 'Mempersiapkan pengeditan transaksi. JANGAN panggil jika belum ada ID transaksi. PENTING: Setelah memanggil tool ini, beri tahu pengguna untuk menyimpan perubahan pada formulir di layar. JANGAN BOHONG bahwa transaksi telah diubah, karena tool ini HANYA memunculkan formulir edit!',
+        parameters: jsonSchema({
+          type: 'object',
+          properties: {
+            transactionId: { type: 'string', description: 'ID transaksi yang akan diedit.' },
+            amount: { type: 'number', description: 'Jumlah baru (opsional).' },
+            description: { type: 'string', description: 'Deskripsi baru (opsional).' },
+            category: { type: 'string', description: 'Kategori baru (opsional).' }
+          },
+          required: ['transactionId']
+        }),
+        execute: async (args: any) => {
+          const executeSupabase = createServerClient();
+          const { data, error } = await executeSupabase
+            .from('transactions')
+            .select('*, categories(name)')
+            .eq('id', args.transactionId)
+            .single();
+          if (error) return { success: false, error: error.message };
+          return { success: true, original: data, updates: { amount: args.amount, description: args.description, category: args.category } };
         }
       }),
 
@@ -1034,59 +1316,6 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
           }
         }
       }),
-
-      search_transactions: tool({
-        description: 'Mencari riwayat transaksi di database berdasarkan kata kunci (keyword) seperti nama barang, merchant, atau catatan. Gunakan tool ini jika pengguna menanyakan riwayat pembelian lama atau total transaksi spesifik yang mungkin tidak ada di daftar 150 transaksi terbaru.',
-        parameters: jsonSchema({
-          type: 'object',
-          properties: {
-            keyword: { 
-              type: 'string', 
-              description: 'Kata kunci pencarian (misal: "jago", "kopi", "bensin").' 
-            },
-            limit: {
-              type: 'integer',
-              description: 'Maksimal jumlah hasil yang dikembalikan (opsional, default 50).'
-            }
-          },
-          required: ['keyword']
-        }),
-        execute: async ({ keyword, limit = 50 }: any) => {
-          try {
-            const executeSupabase = createServerClient();
-            
-            // Search in description using ilike
-            const { data: results, error } = await executeSupabase
-              .from('transactions')
-              .select('id, description, amount, type, transaction_date, category_id')
-              .eq('profile', profile)
-              .ilike('description', `%${keyword}%`)
-              .order('transaction_date', { ascending: false })
-              .limit(limit);
-
-            if (error) {
-              return { success: false, error: error.message };
-            }
-
-            if (!results || results.length === 0) {
-              return { success: true, message: `Tidak ditemukan transaksi dengan kata kunci "${keyword}".` };
-            }
-
-            const formattedResults = results.map((t: any) => 
-              `- [${t.transaction_date}] ${t.type}: ${t.description} (Rp ${t.amount.toLocaleString('id-ID')})`
-            ).join('\n');
-
-            const totalAmount = results.reduce((sum: number, t: any) => sum + parseFloat(t.amount), 0);
-
-            return {
-              success: true,
-              message: `Ditemukan ${results.length} transaksi yang mengandung kata "${keyword}".\nTotal Nominal: Rp ${totalAmount.toLocaleString('id-ID')}\n\nRincian:\n${formattedResults}`
-            };
-          } catch (err: any) {
-            return { success: false, error: err.message };
-          }
-        }
-      })
     };
 
     // MULTI-MODEL TASK ROUTER (Menggabungkan logika n8n ke Webchat)
