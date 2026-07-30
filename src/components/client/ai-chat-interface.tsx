@@ -24,6 +24,20 @@ const SUGGESTIONS = [
   { title: '💡 Saran Hemat Pengeluaran', desc: 'Dapatkan tips hemat konkret berdasarkan transaksi terakhir.', prompt: 'Berikan tips hemat berdasarkan pengeluaran saya.' }
 ];
 
+const preprocessMath = (content: string) => {
+  if (typeof content !== 'string') return content;
+  let processed = content;
+  // Replace \[ ... \] with $$ ... $$
+  processed = processed.replace(/\\\[(.*?)\\\]/gs, '$$$$$1$$$$');
+  // Replace \( ... \) with $ ... $
+  processed = processed.replace(/\\\((.*?)\\\)/gs, '$$$1$$');
+  // Kadang AI lupa backslash: [ \text{...} ]
+  processed = processed.replace(/\[\s*(\\text\{.*?\}.*?)\s*\]/gs, '$$$$ $1 $$$$');
+  // Kadang AI menulis [ Waktu = ... ]
+  processed = processed.replace(/\[\s*(Waktu = .*?)\s*\]/gs, '$$$$ $1 $$$$');
+  return processed;
+};
+
 const compressImageBase64 = (base64Str: string, maxWidth = 1024, maxHeight = 1024, quality = 0.65): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
@@ -479,7 +493,7 @@ const MemoizedMessageBubble = React.memo(({
                   td: ({node, ...props}) => <td className="p-2.5 text-xs border-b border-slate-100 last:border-0 text-slate-750" {...props} />,
                 }}
               >
-                {message.content}
+                {preprocessMath(message.content as string)}
               </ReactMarkdown>
             </div>
           )}
