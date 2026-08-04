@@ -185,6 +185,12 @@ export default async function DashboardPage() {
 
   dailyBalances.reverse();
 
+  // Dynamic calculation for Net Worth percentage change (last 30 days)
+  const oldestBalance = dailyBalances[0]?.balance || totalBalance;
+  const netWorthDiff = totalBalance - oldestBalance;
+  const netWorthPct = oldestBalance > 0 ? (netWorthDiff / oldestBalance) * 100 : 0;
+  const isNetWorthUp = netWorthDiff >= 0;
+
   // 3. Fetch Saving Goals (Limit to top 2 goals)
   const { data: savingGoals } = await supabase
     .from('saving_goals')
@@ -227,20 +233,18 @@ export default async function DashboardPage() {
       <header className="flex items-center justify-between border-b border-[#e2e8f0] pb-4 sm:pb-5 gap-2 sm:gap-4">
         <div className="flex items-center flex-grow min-w-0">
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-black truncate">Financial Command Center</h1>
-          <div className="ml-8 relative w-full max-w-xs hidden md:block">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#45464d] h-4 w-4" />
-            <input 
-              className="w-full pl-9 pr-4 py-1.5 bg-[#f2f4f6] border border-transparent rounded-lg text-xs font-medium focus:outline-none focus:border-black focus:bg-white transition-all duration-200" 
-              placeholder="Cari aset atau transaksi..." 
-              type="text"
-            />
+          <div className="ml-6 hidden md:flex items-center space-x-2 bg-[#f2f4f6] border border-[#e2e8f0] px-3 py-1.5 rounded-lg text-xs font-medium text-[#45464d]">
+            <Calendar className="h-4 w-4 text-black shrink-0" />
+            <span>{now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
           </div>
         </div>
         <div className="flex items-center space-x-2 sm:space-x-4 shrink-0">
-          <button className="p-1.5 sm:p-2 rounded-full hover:bg-[#eceef0] relative shrink-0">
+          <Link href="/recurring" className="p-1.5 sm:p-2 rounded-full hover:bg-[#eceef0] relative shrink-0" title="Tagihan & Transaksi Rutin">
             <Bell className="h-4 sm:h-5 w-4 sm:w-5 text-black" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-[#ba1a1a] rounded-full"></span>
-          </button>
+            {dueRecurring.length > 0 && (
+              <span className="absolute top-1 right-1 w-2 h-2 bg-[#ba1a1a] rounded-full animate-ping"></span>
+            )}
+          </Link>
           <div className="h-5 sm:h-6 w-[1px] bg-[#c6c6cd]"></div>
           <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
             <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-[#45464d]">Live Sync</span>
@@ -328,9 +332,9 @@ export default async function DashboardPage() {
                 {formatRupiah(totalBalance)}
               </h2>
               <div className="flex items-center mt-1.5 space-x-1.5">
-                <div className="flex items-center text-[#009668] text-xs font-bold">
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                  <span>+0.52%</span>
+                <div className={`flex items-center ${isNetWorthUp ? 'text-[#009668]' : 'text-[#ba1a1a]'} text-xs font-bold`}>
+                  <ArrowUpRight className={`h-3.5 w-3.5 ${isNetWorthUp ? '' : 'rotate-90'}`} />
+                  <span>{isNetWorthUp ? '+' : ''}{netWorthPct.toFixed(2)}%</span>
                 </div>
                 <span className="text-[10px] text-[#45464d]">30 hari terakhir</span>
               </div>
@@ -448,18 +452,20 @@ export default async function DashboardPage() {
               )}
 
               {/* Action 2: Audit Biaya */}
-              <div className="p-3 rounded-lg bg-[#f2f4f6] border border-[#e2e8f0] flex items-center justify-between hover:border-black transition-all cursor-pointer group">
-                <div className="flex items-center space-x-3">
-                  <div className="p-1.5 bg-white rounded border border-[#e2e8f0] group-hover:bg-black group-hover:text-white transition-all">
-                    <BellRing className="h-4 w-4 text-slate-700 group-hover:text-white" />
+              <Link href="/budget">
+                <div className="p-3 rounded-lg bg-[#f2f4f6] border border-[#e2e8f0] flex items-center justify-between hover:border-black transition-all cursor-pointer group">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-1.5 bg-white rounded border border-[#e2e8f0] group-hover:bg-black group-hover:text-white transition-all">
+                      <BellRing className="h-4 w-4 text-slate-700 group-hover:text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-black">Evaluasi Pengeluaran Bulanan</p>
+                      <p className="text-[9px] text-[#45464d]">Audit tagihan dan anggaran aktif Anda</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs font-bold text-black">Evaluasi Pengeluaran Bulanan</p>
-                    <p className="text-[9px] text-[#45464d]">Audit tagihan dan langganan aktif Anda</p>
-                  </div>
+                  <ChevronRight className="h-4 w-4 text-[#45464d] group-hover:text-black transition-colors" />
                 </div>
-                <ChevronRight className="h-4 w-4 text-[#45464d] group-hover:text-black transition-colors" />
-              </div>
+              </Link>
             </div>
           </div>
 

@@ -30,6 +30,8 @@ export async function actionSaveSimulatorConfig(
       return { success: false, error: error.message };
     }
 
+    revalidatePath('/simulator');
+    revalidatePath('/parameter');
     return { success: true };
   } catch (err: any) {
     console.error('actionSaveSimulatorConfig error:', err);

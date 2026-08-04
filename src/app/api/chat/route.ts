@@ -437,9 +437,9 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
 
     console.time('AI Stream Connect');
 
-    const githubOpenAI = createOpenAI({
-      baseURL: 'https://models.inference.ai.azure.com',
-      apiKey: process.env.GITHUB_PAT || '',
+    const openrouter = createOpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: process.env.OPENROUTER_API_KEY || '',
     });
 
     // ========== TWO-PASS VISION: Pre-scan images with a lightweight call ==========
@@ -507,7 +507,7 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
           ];
 
           const visionResult = await generateText({
-            model: githubOpenAI('gpt-4o'),
+            model: openrouter('openai/gpt-oss-20b:free'),
             messages: [
               {
                 role: 'user',
@@ -1357,30 +1357,33 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
     const heavyKeywords = ['analisis', 'simulasi', 'proyeksi', 'investasi', 'strategi', 'evaluasi', 'breakdown', 'rekomendasi', 'perbandingan', 'rencana', 'iphone', 'jangka panjang', 'defisit', 'budget'];
     const isHeavyAnalysis = heavyKeywords.some(kw => lastMsgContent.includes(kw));
 
-    let primaryModel = 'gpt-4o-mini';
+    let primaryModel = 'google/gemma-4-26b-a4b-it:free';
     let selectedMode = 'GENERAL';
 
     if (hasAttachments || isMultimodal) {
-      primaryModel = 'gpt-4o';
+      primaryModel = 'google/gemma-4-26b-a4b-it:free';
       selectedMode = 'VISION (OCR Struk)';
     } else if (isHeavyAnalysis) {
-      primaryModel = 'gpt-4o';
+      primaryModel = 'google/gemma-4-26b-a4b-it:free';
       selectedMode = 'HEAVY ANALYSIS (Penalaran Mendalam)';
     } else {
-      primaryModel = 'gpt-4o-mini';
+      primaryModel = 'google/gemma-4-26b-a4b-it:free';
       selectedMode = 'GENERAL (Chat & Catat Cepat)';
     }
 
     console.log(`[AI Router] Mode: ${selectedMode} | Model Target: ${primaryModel}`);
 
-    // Forward to n8n Webhook if configured
+    // Forward to n8n Webhook if configured (with non-blocking 300ms timeout)
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
     if (n8nWebhookUrl) {
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 300);
         const imageUrl = hasAttachments ? lastUserMessage?.experimental_attachments[0]?.url : undefined;
         fetch(n8nWebhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
           body: JSON.stringify({
             chat_type: (hasAttachments || isMultimodal) ? 'RECEIPT_OCR' : isHeavyAnalysis ? 'HEAVY_ANALYSIS' : 'GENERAL',
             chatInput: lastMsgContent,
@@ -1389,7 +1392,7 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
             profile,
             timestamp: new Date().toISOString()
           })
-        }).catch(err => console.error('[n8n Webhook Forward Error]:', err));
+        }).then(() => clearTimeout(timeoutId)).catch(() => clearTimeout(timeoutId));
       } catch (e) {
         // Ignore webhook dispatch errors
       }
@@ -1398,7 +1401,7 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
     let result;
     try {
       result = await streamText({
-        model: githubOpenAI(primaryModel),
+        model: openrouter(primaryModel),
         system: systemInstructions,
         messages: recentMessages,
         temperature: 0.2,
@@ -1407,9 +1410,9 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
         onFinish: onFinishCallback
       });
     } catch (err: any) {
-      console.warn(`Failed to call ${primaryModel}, falling back to gpt-4o-mini:`, err);
+      console.warn(`Failed to call ${primaryModel}, falling back to google/gemma-4-26b-a4b-it:free:`, err);
       result = await streamText({
-        model: githubOpenAI('gpt-4o-mini'),
+        model: openrouter('google/gemma-4-26b-a4b-it:free'),
         system: systemInstructions,
         messages: recentMessages,
         temperature: 0.2,

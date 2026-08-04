@@ -3,8 +3,6 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { getJakartaDate } from '@/utils/date';
 
-export const runtime = 'edge';
-
 function getStartOfWeek(dateStr: string): string {
   const d = new Date(dateStr);
   const day = d.getDay(); // 0 is Sunday, 1 is Monday, etc.

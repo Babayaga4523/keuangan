@@ -2,8 +2,6 @@ import { createServerClient } from '@/lib/supabase-server';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
-export const runtime = 'edge';
-
 export async function GET() {
   try {
     const supabase = createServerClient();

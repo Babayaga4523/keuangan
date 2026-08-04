@@ -3,11 +3,11 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createServerClient } from '@/lib/supabase-server';
 import { cookies } from 'next/headers';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
-const githubOpenAI = createOpenAI({
-  baseURL: 'https://models.inference.ai.azure.com',
-  apiKey: process.env.GITHUB_PAT || '',
+const openrouter = createOpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENROUTER_API_KEY || '',
 });
 
 export async function POST(req: Request) {
@@ -49,7 +49,7 @@ Tugas: Berikan analisis cerdas apakah rencana ini "Aman", "Mepet (Kritis)", atau
 `;
 
       const { text } = await generateText({
-        model: githubOpenAI('gpt-4o-mini'),
+        model: openrouter('google/gemma-4-26b-a4b-it:free'),
         prompt,
         temperature: 0.3
       });
@@ -97,7 +97,7 @@ Tugas: Berikan 1-2 kalimat saran optimasi hemat yang sangat spesifik berdasarkan
 `;
 
       const { text } = await generateText({
-        model: githubOpenAI('gpt-4o-mini'),
+        model: openrouter('google/gemma-4-26b-a4b-it:free'),
         prompt,
         temperature: 0.3
       });

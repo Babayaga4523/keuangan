@@ -14,7 +14,7 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
 
       # AI Services
-      GITHUB_PAT: ${GITHUB_PAT}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
 
       # Web Push / VAPID Notifications
       VAPID_SUBJECT: ${VAPID_SUBJECT}
@@ -39,8 +39,8 @@ services:
       - NODE_ENV=production
       - WEBHOOK_URL=http://localhost:5678/
       - GENERIC_TIMEZONE=Asia/Jakarta
-      - OPENAI_API_KEY=${GITHUB_PAT}
-      - OPENAI_API_BASE=https://models.inference.ai.azure.com
+      - OPENAI_API_KEY=${OPENROUTER_API_KEY}
+      - OPENAI_API_BASE=https://openrouter.ai/api/v1
     volumes:
       - n8n_data:/home/node/.n8n
 

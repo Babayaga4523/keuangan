@@ -30,7 +30,7 @@ export function getJakartaDate(date: Date = new Date()) {
     day,
     dateString: `${yearStr}-${monthStr}-${dayStr}`, // YYYY-MM-DD
     startOfMonthString: `${yearStr}-${monthStr}-01`, // YYYY-MM-01
-    endOfMonthString: `${yearStr}-${monthStr}-${new Date(year, month, 0).getDate()}` // YYYY-MM-DD (last day of month)
+    endOfMonthString: `${yearStr}-${monthStr}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}` // YYYY-MM-DD (last day of month)
   };
 }
 

@@ -25,6 +25,8 @@ function revalidateAll() {
   revalidatePath('/tabungan');
   revalidatePath('/parameter');
   revalidatePath('/simulator');
+  revalidatePath('/recurring');
+  revalidatePath('/budget');
 }
 
 // ───────────────────────────────────────────────
@@ -437,21 +439,31 @@ export async function actionExecuteRecurring(id: string): Promise<ActionResult> 
 
   if (txErr) return { success: false, error: txErr.message };
 
-  // Hitung next_due berikutnya
-  const currentDue = new Date(rec.next_due);
+  // Hitung next_due berikutnya secara presisi (immutable)
+  const [yearNum, monthNum, dayNum] = rec.next_due.split('-').map(Number);
+  const currentDue = new Date(Date.UTC(yearNum, monthNum - 1, dayNum));
   let nextDue: Date;
+  
   if (rec.frequency === 'DAILY') {
-    nextDue = new Date(currentDue.setDate(currentDue.getDate() + 1));
+    nextDue = new Date(currentDue.getTime() + 24 * 60 * 60 * 1000);
   } else if (rec.frequency === 'WEEKLY') {
-    nextDue = new Date(currentDue.setDate(currentDue.getDate() + 7));
+    nextDue = new Date(currentDue.getTime() + 7 * 24 * 60 * 60 * 1000);
   } else {
-    nextDue = new Date(currentDue.setMonth(currentDue.getMonth() + 1));
+    const targetDay = rec.day_of_month || dayNum || 1;
+    const targetMonthRaw = currentDue.getUTCMonth() + 1;
+    const targetYear = currentDue.getUTCFullYear() + Math.floor(targetMonthRaw / 12);
+    const finalMonth = targetMonthRaw % 12;
+    const maxDays = new Date(Date.UTC(targetYear, finalMonth + 1, 0)).getUTCDate();
+    const finalDay = Math.min(targetDay, maxDays);
+    nextDue = new Date(Date.UTC(targetYear, finalMonth, finalDay));
   }
+
+  const nextDueStr = nextDue.toISOString().split('T')[0];
 
   // Update next_due
   await supabase
     .from('recurring_transactions')
-    .update({ next_due: nextDue.toISOString().split('T')[0] })
+    .update({ next_due: nextDueStr })
     .eq('id', id);
 
   revalidateAll();
