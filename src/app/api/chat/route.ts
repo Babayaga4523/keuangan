@@ -437,9 +437,14 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
 
     console.time('AI Stream Connect');
 
+    const openrouterApiKey = process.env.OPENROUTER_API_KEY;
+    if (!openrouterApiKey) {
+      return new Response(JSON.stringify({ error: 'OPENROUTER_API_KEY belum dikonfigurasi di lingkungan server.' }), { status: 401 });
+    }
+
     const openrouter = createOpenAI({
       baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: process.env.OPENROUTER_API_KEY || '',
+      apiKey: openrouterApiKey,
     });
 
     // ========== TWO-PASS VISION: Pre-scan images with a lightweight call ==========

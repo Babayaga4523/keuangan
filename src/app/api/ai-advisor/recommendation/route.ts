@@ -5,13 +5,21 @@ import { cookies } from 'next/headers';
 
 export const runtime = 'nodejs';
 
-const openrouter = createOpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY || '',
-});
-
 export async function POST(req: Request) {
   try {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      console.error('[AI Recommendation API Error] OPENROUTER_API_KEY missing in environment variables.');
+      return Response.json(
+        { error: 'OPENROUTER_API_KEY belum dikonfigurasi di file .env.local atau environment server.' }, 
+        { status: 401 }
+      );
+    }
+
+    const openrouter = createOpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: apiKey,
+    });
     const url = new URL(req.url);
     const type = url.searchParams.get('type') || 'savings';
     
