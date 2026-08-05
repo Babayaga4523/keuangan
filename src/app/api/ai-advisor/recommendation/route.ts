@@ -104,13 +104,28 @@ ${Object.entries(categoryTotals).map(([cat, amt]) => `- ${cat}: Rp ${amt.toLocal
 Tugas: Berikan 1-2 kalimat saran optimasi hemat yang sangat spesifik berdasarkan pengeluaran di atas. Hitung secara logis berapa uang yang bisa dihemat dari salah satu kategori pengeluaran terbesar tersebut, dan sebutkan target tabungan mana (sesuai data aktif di atas) yang bisa dicapai berapa bulan lebih cepat dengan merealokasikan uang tersebut. Langsung berikan kalimat saran taktis tersebut tanpa basa-basi pembuka.
 `;
 
-      const { text } = await generateText({
-        model: openrouter('google/gemma-4-26b-a4b-it:free'),
-        prompt,
-        temperature: 0.3
-      });
+      let recommendationText = '';
+      try {
+        const { text } = await generateText({
+          model: openrouter('google/gemma-4-26b-a4b-it:free'),
+          prompt,
+          temperature: 0.3
+        });
+        recommendationText = text.trim();
+      } catch (genErr) {
+        console.warn('Primary model failed for recommendation, using fallback:', genErr);
+        // Generik fallback berbasis data aktual jika API mengalami gangguan sementara
+        const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0];
+        const topGoal = goals[0];
+        if (topCategory && topGoal) {
+          const monthlySavingsPotential = Math.round(topCategory[1] * 0.2);
+          recommendationText = `Kurangi pengeluaran kategori ${topCategory[0]} sebesar 20% (≈ Rp ${monthlySavingsPotential.toLocaleString('id-ID')}/bulan) untuk dialokasikan ke "${topGoal.name}", sehingga target dapat tercapai lebih cepat.`;
+        } else {
+          recommendationText = `Alokasikan minimal 10% dari pendapatan bulanan Anda ke target tabungan aktif untuk mempercepat pencapaian finansial Anda.`;
+        }
+      }
 
-      return Response.json({ recommendation: text.trim() });
+      return Response.json({ recommendation: recommendationText });
     }
   } catch (err: any) {
     console.error('Error generating recommendation:', err);
