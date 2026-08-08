@@ -370,7 +370,9 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
 
     // Vercel AI SDK useChat automatically sends the FULL conversation history in `messages`.
     // To prevent AI lag and save tokens on very long chats, we only send the last 5 messages for context.
-    const recentMessages = messages.slice(-5).map((msg: any, idx: number, arr: any[]) => {
+    // Groq free tier limit: 12,000 TPM. System prompt + tools alone ~9,000 tokens.
+    // Keep only last 3 messages to stay safely under the limit.
+    const recentMessages = messages.slice(-3).map((msg: any, idx: number, arr: any[]) => {
       const isLastMessage = idx === arr.length - 1;
 
       // If there are experimental attachments (specifically images), convert the message to a multimodal content array
@@ -514,28 +516,17 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
             ...imageParts
           ];
 
-          // Vision model selection:
-          // - Groq: use Llama 4 Scout (native multimodal, supports image input)
-          // - OpenRouter: use Gemma 4 (free, supports image input)
-          // Note: Groq's llama-3.3-70b-versatile does NOT support image input
-          let visionModelProvider;
-          let visionModelId: string;
-          if (groqApiKey) {
-            visionModelProvider = createOpenAI({
-              baseURL: 'https://api.groq.com/openai/v1',
-              apiKey: groqApiKey,
-            });
-            visionModelId = 'meta-llama/llama-4-scout-17b-16e-instruct';
-          } else {
-            visionModelProvider = createOpenAI({
-              baseURL: 'https://openrouter.ai/api/v1',
-              apiKey: openrouterApiKey || apiKey,
-            });
-            visionModelId = 'google/gemma-4-26b-a4b-it:free';
-          }
+          // Vision ALWAYS uses OpenRouter (Gemma) because:
+          // - Groq llama-3.3-70b-versatile: does NOT support image input
+          // - Groq llama-4-scout: requires paid tier, not available on free
+          // - OpenRouter gemma-4-26b:free: supports image input, always available
+          const visionProvider = createOpenAI({
+            baseURL: 'https://openrouter.ai/api/v1',
+            apiKey: openrouterApiKey || apiKey,
+          });
 
           const visionResult = await generateText({
-            model: visionModelProvider(visionModelId),
+            model: visionProvider('google/gemma-4-26b-a4b-it:free'),
             messages: [
               {
                 role: 'user',
@@ -1436,16 +1427,35 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
         onFinish: onFinishCallback
       });
     } catch (err: any) {
-      console.warn(`Failed to call ${primaryModel}, falling back to ${fallbackModel}:`, err);
-      result = await streamText({
-        model: aiProvider(fallbackModel),
-        system: systemInstructions,
-        messages: recentMessages,
-        temperature: 0.2,
-        tools: chatTools,
-        maxSteps: 5,
-        onFinish: onFinishCallback
-      });
+      const isTokenOverflow = (err as any)?.statusCode === 413 || (err as any)?.message?.includes('too large');
+      if (isTokenOverflow && openrouterApiKey) {
+        // Groq free tier TPM exceeded → fallback to OpenRouter
+        console.warn(`[AI Fallback] Groq token limit exceeded, falling back to OpenRouter:`, err.message);
+        const openrouterProvider = createOpenAI({
+          baseURL: 'https://openrouter.ai/api/v1',
+          apiKey: openrouterApiKey,
+        });
+        result = await streamText({
+          model: openrouterProvider('google/gemma-4-26b-a4b-it:free'),
+          system: systemInstructions,
+          messages: recentMessages,
+          temperature: 0.2,
+          tools: chatTools,
+          maxSteps: 5,
+          onFinish: onFinishCallback
+        });
+      } else {
+        console.warn(`Failed to call ${primaryModel}, falling back to ${fallbackModel}:`, err);
+        result = await streamText({
+          model: aiProvider(fallbackModel),
+          system: systemInstructions,
+          messages: recentMessages,
+          temperature: 0.2,
+          tools: chatTools,
+          maxSteps: 5,
+          onFinish: onFinishCallback
+        });
+      }
     }
     console.timeEnd('AI Stream Connect');
 
