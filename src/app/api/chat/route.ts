@@ -516,26 +516,59 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
             ...imageParts
           ];
 
-          // Vision ALWAYS uses OpenRouter (Gemma) because:
-          // - Groq llama-3.3-70b-versatile: does NOT support image input
-          // - Groq llama-4-scout: requires paid tier, not available on free
-          // - OpenRouter gemma-4-26b:free: supports image input, always available
-          const visionProvider = createOpenAI({
-            baseURL: 'https://openrouter.ai/api/v1',
-            apiKey: openrouterApiKey || apiKey,
-          });
+          // Vision uses Groq qwen/qwen3.6-27b (multimodal, 250k TPM) when GROQ_API_KEY is set,
+          // falling back to OpenRouter Gemma if Groq vision fails or key is missing.
+          let visionProvider;
+          let visionModelId;
+          if (groqApiKey) {
+            visionProvider = createOpenAI({
+              baseURL: 'https://api.groq.com/openai/v1',
+              apiKey: groqApiKey,
+            });
+            visionModelId = 'qwen/qwen3.6-27b';
+          } else {
+            visionProvider = createOpenAI({
+              baseURL: 'https://openrouter.ai/api/v1',
+              apiKey: openrouterApiKey || apiKey,
+            });
+            visionModelId = 'google/gemma-4-26b-a4b-it:free';
+          }
 
-          const visionResult = await generateText({
-            model: visionProvider('google/gemma-4-26b-a4b-it:free'),
-            messages: [
-              {
-                role: 'user',
-                content: visionPromptParts
-              }
-            ],
-            temperature: 0.05,
-            maxTokens: 2000
-          });
+          let visionResult;
+          try {
+            visionResult = await generateText({
+              model: visionProvider(visionModelId),
+              messages: [
+                {
+                  role: 'user',
+                  content: visionPromptParts
+                }
+              ],
+              temperature: 0.05,
+              maxTokens: 2000
+            });
+          } catch (groqVisionErr: any) {
+            if (groqApiKey && openrouterApiKey) {
+              console.warn('[Vision Pre-scan] Groq vision failed, trying OpenRouter fallback:', groqVisionErr.message);
+              const fallbackProvider = createOpenAI({
+                baseURL: 'https://openrouter.ai/api/v1',
+                apiKey: openrouterApiKey,
+              });
+              visionResult = await generateText({
+                model: fallbackProvider('google/gemma-4-26b-a4b-it:free'),
+                messages: [
+                  {
+                    role: 'user',
+                    content: visionPromptParts
+                  }
+                ],
+                temperature: 0.05,
+                maxTokens: 2000
+              });
+            } else {
+              throw groqVisionErr;
+            }
+          }
           visionDescription = visionResult.text || '';
           console.timeEnd('Vision Pre-scan');
           console.log('[Vision Pre-scan] Result length:', visionDescription.length, 'chars');
