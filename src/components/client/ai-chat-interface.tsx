@@ -662,7 +662,7 @@ const MemoizedMessageBubble = React.memo(({
   
   const hasVisibleContent = message.content && message.content.trim().length > 0;
   const hasVisibleTools = toolInvocations.some((t: any) => 
-    ['extract_receipt_data', 'add_transaction', 'prepare_delete_transaction', 'prepare_update_transaction'].includes(t.toolName)
+    ['extract_receipt_data', 'add_transaction', 'prepare_delete_transaction', 'prepare_update_transaction', 'web_search'].includes(t.toolName)
   );
 
   // Hide completely empty background tool calls (like search_transactions) unless streaming
