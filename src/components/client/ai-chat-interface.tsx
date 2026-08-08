@@ -603,7 +603,9 @@ const MemoizedMessageBubble = React.memo(({
   categories,
   onSaveTransaction,
   onDeleteTransaction,
-  onUpdateTransaction
+  onUpdateTransaction,
+  onWebSearchPrompt,
+  showToast
 }: { 
   message: Message; 
   isStreaming?: boolean;
@@ -611,16 +613,47 @@ const MemoizedMessageBubble = React.memo(({
   onSaveTransaction: (toolCallId: string, draftData: any, imageHash: string) => Promise<boolean>;
   onDeleteTransaction: (txId: string) => Promise<boolean>;
   onUpdateTransaction: (txId: string, data: any) => Promise<boolean>;
+  onWebSearchPrompt?: (queryText: string) => void;
+  showToast?: (msg: string) => void;
 }) => {
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+  const [globeMenuOpen, setGlobeMenuOpen] = useState(false);
 
   const handleCopy = () => {
     if (navigator.clipboard && message.content) {
       navigator.clipboard.writeText(message.content);
       setCopied(true);
+      if (showToast) showToast('Teks jawaban berhasil disalin ke clipboard!');
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleFeedback = (type: 'up' | 'down') => {
+    if (feedback === type) {
+      setFeedback(null);
+    } else {
+      setFeedback(type);
+      if (showToast) {
+        showToast(type === 'up' ? '👍 Terima kasih atas respon positif Anda!' : '👎 Masukan Anda membantu kami meningkatkan kecerdasan AI.');
+      }
+    }
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({ title: 'Respon Opin AI', text: message.content })
+        .then(() => { if (showToast) showToast('Berhasil membagikan pesan!'); })
+        .catch(() => {});
+    } else {
+      handleCopy();
+    }
+  };
+
+  const getCleanQuery = () => {
+    const text = message.content || '';
+    // Strip markdown tags for search query
+    return text.replace(/[#*`_~]/g, '').trim().substring(0, 120);
   };
 
   const isUser = message.role === 'user';
@@ -717,55 +750,86 @@ const MemoizedMessageBubble = React.memo(({
 
         {/* Gemini Response Toolbar */}
         {!isUser && hasVisibleContent && !isStreaming && (
-          <div className="flex items-center gap-1 mt-1.5 text-slate-400 pl-1">
+          <div className="flex items-center gap-1 mt-1.5 text-slate-400 pl-1 relative">
             <button 
               type="button" 
-              onClick={() => setFeedback(feedback === 'up' ? null : 'up')}
-              className={`p-1.5 rounded-full hover:bg-slate-100 transition-colors ${feedback === 'up' ? 'text-blue-600 bg-blue-50' : 'hover:text-slate-700'}`}
-              title="Bagus"
+              onClick={() => handleFeedback('up')}
+              className={`p-1.5 rounded-full hover:bg-slate-100 transition-all active:scale-90 ${feedback === 'up' ? 'text-blue-600 bg-blue-50 font-bold' : 'hover:text-slate-700'}`}
+              title="Respons Bagus"
             >
               <ThumbsUp className="w-3.5 h-3.5" />
             </button>
             <button 
               type="button" 
-              onClick={() => setFeedback(feedback === 'down' ? null : 'down')}
-              className={`p-1.5 rounded-full hover:bg-slate-100 transition-colors ${feedback === 'down' ? 'text-red-600 bg-red-50' : 'hover:text-slate-700'}`}
-              title="Kurang Bagus"
+              onClick={() => handleFeedback('down')}
+              className={`p-1.5 rounded-full hover:bg-slate-100 transition-all active:scale-90 ${feedback === 'down' ? 'text-red-600 bg-red-50 font-bold' : 'hover:text-slate-700'}`}
+              title="Kurang Memuaskan"
             >
               <ThumbsDown className="w-3.5 h-3.5" />
             </button>
             <button 
               type="button" 
               onClick={handleCopy}
-              className="p-1.5 rounded-full hover:bg-slate-100 hover:text-slate-700 transition-colors"
-              title="Salin Teks"
+              className="p-1.5 rounded-full hover:bg-slate-100 hover:text-slate-700 transition-all active:scale-90"
+              title="Salin Teks Jawaban"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
             <button 
               type="button" 
-              onClick={() => {
-                if (navigator.share) {
-                  navigator.share({ title: 'Respon Opin AI', text: message.content }).catch(() => {});
-                } else {
-                  handleCopy();
-                }
-              }}
-              className="p-1.5 rounded-full hover:bg-slate-100 hover:text-slate-700 transition-colors"
-              title="Bagikan"
+              onClick={handleShare}
+              className="p-1.5 rounded-full hover:bg-slate-100 hover:text-slate-700 transition-all active:scale-90"
+              title="Bagikan Teks Jawaban"
             >
               <Share2 className="w-3.5 h-3.5" />
             </button>
-            <button 
-              type="button" 
-              onClick={() => {
-                window.open(`https://www.google.com/search?q=${encodeURIComponent((message.content || '').substring(0, 100))}`, '_blank');
-              }}
-              className="p-1.5 rounded-full hover:bg-slate-100 hover:text-slate-700 transition-colors"
-              title="Cek di Google Search"
-            >
-              <Globe className="w-3.5 h-3.5" />
-            </button>
+
+            {/* Globe / Web Search Action Menu */}
+            <div className="relative">
+              <button 
+                type="button" 
+                onClick={() => setGlobeMenuOpen(!globeMenuOpen)}
+                className={`p-1.5 rounded-full transition-all active:scale-90 ${globeMenuOpen ? 'bg-blue-100 text-blue-700 font-bold' : 'hover:bg-slate-100 hover:text-slate-700'}`}
+                title="Pencarian Web (Web Search)"
+              >
+                <Globe className="w-3.5 h-3.5" />
+              </button>
+
+              {globeMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setGlobeMenuOpen(false)} />
+                  <div className="absolute left-0 bottom-8 z-30 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-150 text-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGlobeMenuOpen(false);
+                        const q = getCleanQuery();
+                        if (onWebSearchPrompt) {
+                          onWebSearchPrompt(`Tolong cari informasi terbaru di internet tentang topik ini: "${q}"`);
+                        }
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold hover:bg-blue-50 text-blue-700 rounded-xl transition-colors text-left"
+                    >
+                      <Globe className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span>Cari via Opin AI (Web Search)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGlobeMenuOpen(false);
+                        const q = getCleanQuery();
+                        window.open(`https://www.google.com/search?q=${encodeURIComponent(q)}`, '_blank');
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold hover:bg-slate-100 text-slate-700 rounded-xl transition-colors text-left"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <span>Buka di Google Search</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         )}
 
@@ -811,7 +875,7 @@ const MemoizedMessageBubble = React.memo(({
                 const result = toolInv.result;
                 const isExecuting = toolInv.state === 'call' || !result;
                 return (
-                  <div key={toolInv.toolCallId} className="flex items-center gap-2 px-3 py-1.5 bg-blue-50/80 border border-blue-200/80 text-blue-800 rounded-full text-xs font-semibold my-1 shadow-2xs">
+                  <div key={toolInv.toolCallId} className="flex items-center gap-2 px-3.5 py-2 bg-blue-50/90 border border-blue-200 text-blue-900 rounded-full text-xs font-semibold my-1.5 shadow-2xs">
                     <Globe className={`w-3.5 h-3.5 text-blue-600 ${isExecuting ? 'animate-spin' : ''}`} />
                     <span>{isExecuting ? `Mencari "${query}" di internet...` : `Mencari web: "${query}" (${result?.results?.length || 0} hasil ditemukan)`}</span>
                   </div>
@@ -1018,6 +1082,8 @@ export default function AiChatInterface() {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [attachments, setAttachments] = useState<Array<{ url: string; name: string; contentType: string }>>([]);
   const [isListening, setIsListening] = useState(false);
+  const [toastText, setToastText] = useState<string | null>(null);
+  const toastTimeoutRef = useRef<any>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatCanvasRef = useRef<HTMLDivElement>(null);
@@ -1568,6 +1634,17 @@ export default function AiChatInterface() {
                       onSaveTransaction={handleSaveReceiptTransaction}
                       onDeleteTransaction={handleDeleteTransaction}
                       onUpdateTransaction={handleUpdateTransaction}
+                      onWebSearchPrompt={(queryText) => {
+                        append({
+                          role: 'user',
+                          content: queryText
+                        });
+                      }}
+                      showToast={(msg) => {
+                        setToastText(msg);
+                        if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+                        toastTimeoutRef.current = setTimeout(() => setToastText(null), 3000);
+                      }}
                     />
                   ))}
                   
@@ -1612,6 +1689,14 @@ export default function AiChatInterface() {
                 </div>
               )}
             </section>
+
+            {/* Floating Toast Notification */}
+            {toastText && (
+              <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900/90 text-white backdrop-blur-md border border-slate-800 shadow-xl text-xs font-semibold animate-in fade-in slide-in-from-top-2 duration-150">
+                <Sparkles className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span>{toastText}</span>
+              </div>
+            )}
 
             {/* Floating Scroll-to-Bottom Button */}
             {showScrollButton && (
