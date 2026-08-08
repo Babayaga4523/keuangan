@@ -12,7 +12,7 @@ export async function subscribeToPush() {
     throw new Error("Izin notifikasi ditolak oleh pengguna.");
   }
 
-  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BOuUO82fiDwjhPqIi0YKkaavbmLEwLbWTeNoJ4Kg2NCRxvmVgijUpbo-PkXufWwYX5HlPz70NhVOQFhwah3L7M0";
   console.log("DEBUG: VAPID Public Key loaded in browser:", publicKey);
   if (!publicKey || publicKey === "undefined" || publicKey === "null" || publicKey === "") {
     throw new Error("VAPID Public Key tidak terkonfigurasi di env (atau bernilai undefined). Silakan restart server Next.js Anda (Ctrl+C lalu npm run dev) agar env baru dimuat.");

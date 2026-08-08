@@ -20,7 +20,8 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJicXpiZnVvaXNzd3VsdXpsb2RqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Mjc0NjIzOSwiZXhwIjoyMDk4MzIyMjIzOX0.olgU6LbFklnspohRSJVGueo_yv3hhs-8PVPtstU0SOE}
 
       # AI Services
-      
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
 
       # Web Push / VAPID Notifications
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
