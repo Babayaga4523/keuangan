@@ -569,9 +569,19 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
               throw groqVisionErr;
             }
           }
-          visionDescription = visionResult.text || '';
+          let rawVisionDescription = visionResult.text || '';
+          
+          // Qwen models output a massive <think>...</think> block.
+          // We MUST strip it out to avoid Groq TPM limit overflow (12k limit) and confusing the Llama model.
+          visionDescription = rawVisionDescription.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+          
+          // Fallback if everything was inside think or empty
+          if (!visionDescription) {
+            visionDescription = rawVisionDescription;
+          }
+
           console.timeEnd('Vision Pre-scan');
-          console.log('[Vision Pre-scan] Result length:', visionDescription.length, 'chars');
+          console.log('[Vision Pre-scan] Result length:', visionDescription.length, 'chars (Raw was:', rawVisionDescription.length, 'chars)');
           console.log('[Vision Pre-scan] Preview:', visionDescription.substring(0, 300));
 
           // Now replace the last message: strip images, inject vision description as text
