@@ -1420,8 +1420,8 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     const heavyKeywords = ['analisis', 'simulasi', 'proyeksi', 'investasi', 'strategi', 'evaluasi', 'breakdown', 'rekomendasi', 'perbandingan', 'rencana', 'iphone', 'jangka panjang', 'defisit', 'budget'];
     const isHeavyAnalysis = heavyKeywords.some(kw => lastMsgContent.includes(kw));
 
-    let primaryModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'google/gemma-4-26b-a4b-it:free';
-    let fallbackModel = groqApiKey ? 'llama-3.1-8b-instant' : 'google/gemma-4-26b-a4b-it:free';
+    let primaryModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'meta-llama/llama-3.3-70b-instruct:free';
+    let fallbackModel = groqApiKey ? 'llama-3.1-8b-instant' : 'google/gemini-2.0-pro-exp-02-05:free';
     let selectedMode = 'GENERAL';
 
     if (hasAttachments || isMultimodal) {
@@ -1471,16 +1471,20 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
         onFinish: onFinishCallback
       });
     } catch (err: any) {
-      const isTokenOverflow = (err as any)?.statusCode === 413 || (err as any)?.message?.includes('too large');
-      if (isTokenOverflow && openrouterApiKey) {
-        // Groq free tier TPM exceeded → fallback to OpenRouter
-        console.warn(`[AI Fallback] Groq token limit exceeded, falling back to OpenRouter:`, err.message);
+      const isRateLimitOrOverflow = (err as any)?.statusCode === 413 || 
+                                    (err as any)?.statusCode === 429 || 
+                                    (err as any)?.message?.toLowerCase().includes('too large') ||
+                                    (err as any)?.message?.toLowerCase().includes('rate limit');
+                                    
+      if (isRateLimitOrOverflow && openrouterApiKey) {
+        // Groq free tier TPM/TPD exceeded → fallback to OpenRouter
+        console.warn(`[AI Fallback] Groq limit exceeded (429/413), falling back to OpenRouter:`, err.message);
         const openrouterProvider = createOpenAI({
           baseURL: 'https://openrouter.ai/api/v1',
           apiKey: openrouterApiKey,
         });
         result = await streamText({
-          model: openrouterProvider('google/gemma-4-26b-a4b-it:free'),
+          model: openrouterProvider('meta-llama/llama-3.3-70b-instruct:free'),
           system: systemInstructions,
           messages: recentMessages,
           temperature: 0.2,
