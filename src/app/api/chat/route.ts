@@ -509,7 +509,8 @@ KEMBALIAN: Rp [angka, jika ada]
 CATATAN KHUSUS: [tulis jika ada info penting lain: no. member, poin, dll]
 
 Jika gambar ini BUKAN struk/nota belanja, jelaskan apa yang kamu lihat dengan singkat.
-JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
+JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.
+DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG berikan hasil akhir saja.`;
 
           const visionPromptParts: any[] = [
             { type: 'text', text: ocrPrompt },
@@ -572,12 +573,12 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
           let rawVisionDescription = visionResult.text || '';
           
           // Qwen models output a massive <think>...</think> block.
-          // We MUST strip it out to avoid Groq TPM limit overflow (12k limit) and confusing the Llama model.
-          visionDescription = rawVisionDescription.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+          // We MUST strip it out. Added (?:<\/think>|$) in case maxTokens cut the response before it finished thinking.
+          visionDescription = rawVisionDescription.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').trim();
           
           // Fallback if everything was inside think or empty
           if (!visionDescription) {
-            visionDescription = rawVisionDescription;
+            visionDescription = "Maaf, pembacaan foto struk terputus atau gagal dibaca (hanya berisi proses berpikir yang terpotong). Tolong bantu sebutkan manual isi struk tersebut.";
           }
 
           console.timeEnd('Vision Pre-scan');
