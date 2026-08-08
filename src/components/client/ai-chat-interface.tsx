@@ -896,7 +896,8 @@ const MemoizedMessageBubble = React.memo(({
   prevProps.message.content === nextProps.message.content && 
   prevProps.message.role === nextProps.message.role && 
   prevProps.isStreaming === nextProps.isStreaming &&
-  prevProps.message.experimental_attachments?.length === nextProps.message.experimental_attachments?.length
+  prevProps.message.experimental_attachments?.length === nextProps.message.experimental_attachments?.length &&
+  JSON.stringify(prevProps.message.toolInvocations || []) === JSON.stringify(nextProps.message.toolInvocations || [])
 );
 MemoizedMessageBubble.displayName = 'MemoizedMessageBubble';
 
