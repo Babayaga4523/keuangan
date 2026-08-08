@@ -514,8 +514,28 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
             ...imageParts
           ];
 
+          // Vision model selection:
+          // - Groq: use Llama 4 Scout (native multimodal, supports image input)
+          // - OpenRouter: use Gemma 4 (free, supports image input)
+          // Note: Groq's llama-3.3-70b-versatile does NOT support image input
+          let visionModelProvider;
+          let visionModelId: string;
+          if (groqApiKey) {
+            visionModelProvider = createOpenAI({
+              baseURL: 'https://api.groq.com/openai/v1',
+              apiKey: groqApiKey,
+            });
+            visionModelId = 'meta-llama/llama-4-scout-17b-16e-instruct';
+          } else {
+            visionModelProvider = createOpenAI({
+              baseURL: 'https://openrouter.ai/api/v1',
+              apiKey: openrouterApiKey || apiKey,
+            });
+            visionModelId = 'google/gemma-4-26b-a4b-it:free';
+          }
+
           const visionResult = await generateText({
-            model: aiProvider(groqApiKey ? 'llama-3.3-70b-versatile' : 'google/gemma-4-26b-a4b-it:free'),
+            model: visionModelProvider(visionModelId),
             messages: [
               {
                 role: 'user',
