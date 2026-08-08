@@ -437,14 +437,17 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
 
     console.time('AI Stream Connect');
 
+    const groqApiKey = process.env.GROQ_API_KEY;
     const openrouterApiKey = process.env.OPENROUTER_API_KEY;
-    if (!openrouterApiKey) {
-      return new Response(JSON.stringify({ error: 'OPENROUTER_API_KEY belum dikonfigurasi di lingkungan server.' }), { status: 401 });
+    const apiKey = groqApiKey || openrouterApiKey;
+
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: 'GROQ_API_KEY atau OPENROUTER_API_KEY belum dikonfigurasi di lingkungan server.' }), { status: 401 });
     }
 
-    const openrouter = createOpenAI({
-      baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: openrouterApiKey,
+    const aiProvider = createOpenAI({
+      baseURL: groqApiKey ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1',
+      apiKey: apiKey,
     });
 
     // ========== TWO-PASS VISION: Pre-scan images with a lightweight call ==========
@@ -512,7 +515,7 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
           ];
 
           const visionResult = await generateText({
-            model: openrouter('openai/gpt-oss-20b:free'),
+            model: aiProvider(groqApiKey ? 'llama-3.3-70b-versatile' : 'google/gemma-4-26b-a4b-it:free'),
             messages: [
               {
                 role: 'user',
@@ -1362,21 +1365,19 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
     const heavyKeywords = ['analisis', 'simulasi', 'proyeksi', 'investasi', 'strategi', 'evaluasi', 'breakdown', 'rekomendasi', 'perbandingan', 'rencana', 'iphone', 'jangka panjang', 'defisit', 'budget'];
     const isHeavyAnalysis = heavyKeywords.some(kw => lastMsgContent.includes(kw));
 
-    let primaryModel = 'google/gemma-4-26b-a4b-it:free';
+    let primaryModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'google/gemma-4-26b-a4b-it:free';
+    let fallbackModel = groqApiKey ? 'llama-3.1-8b-instant' : 'google/gemma-4-26b-a4b-it:free';
     let selectedMode = 'GENERAL';
 
     if (hasAttachments || isMultimodal) {
-      primaryModel = 'google/gemma-4-26b-a4b-it:free';
       selectedMode = 'VISION (OCR Struk)';
     } else if (isHeavyAnalysis) {
-      primaryModel = 'google/gemma-4-26b-a4b-it:free';
       selectedMode = 'HEAVY ANALYSIS (Penalaran Mendalam)';
     } else {
-      primaryModel = 'google/gemma-4-26b-a4b-it:free';
       selectedMode = 'GENERAL (Chat & Catat Cepat)';
     }
 
-    console.log(`[AI Router] Mode: ${selectedMode} | Model Target: ${primaryModel}`);
+    console.log(`[AI Router] Mode: ${selectedMode} | Model Target: ${primaryModel} (${groqApiKey ? 'Groq' : 'OpenRouter'})`);
 
     // Forward to n8n Webhook if configured (with non-blocking 300ms timeout)
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
@@ -1406,7 +1407,7 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
     let result;
     try {
       result = await streamText({
-        model: openrouter(primaryModel),
+        model: aiProvider(primaryModel),
         system: systemInstructions,
         messages: recentMessages,
         temperature: 0.2,
@@ -1415,9 +1416,9 @@ JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.`;
         onFinish: onFinishCallback
       });
     } catch (err: any) {
-      console.warn(`Failed to call ${primaryModel}, falling back to google/gemma-4-26b-a4b-it:free:`, err);
+      console.warn(`Failed to call ${primaryModel}, falling back to ${fallbackModel}:`, err);
       result = await streamText({
-        model: openrouter('google/gemma-4-26b-a4b-it:free'),
+        model: aiProvider(fallbackModel),
         system: systemInstructions,
         messages: recentMessages,
         temperature: 0.2,

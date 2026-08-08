@@ -7,19 +7,23 @@ export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   try {
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    const groqApiKey = process.env.GROQ_API_KEY;
+    const openrouterApiKey = process.env.OPENROUTER_API_KEY;
+    const apiKey = groqApiKey || openrouterApiKey;
+
     if (!apiKey) {
-      console.error('[AI Recommendation API Error] OPENROUTER_API_KEY missing in environment variables.');
+      console.error('[AI Recommendation API Error] GROQ_API_KEY or OPENROUTER_API_KEY missing in environment variables.');
       return Response.json(
-        { error: 'OPENROUTER_API_KEY belum dikonfigurasi di file .env.local atau environment server.' }, 
+        { error: 'GROQ_API_KEY atau OPENROUTER_API_KEY belum dikonfigurasi di environment server.' }, 
         { status: 401 }
       );
     }
 
-    const openrouter = createOpenAI({
-      baseURL: 'https://openrouter.ai/api/v1',
+    const aiProvider = createOpenAI({
+      baseURL: groqApiKey ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1',
       apiKey: apiKey,
     });
+    const selectedModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'google/gemma-4-26b-a4b-it:free';
     const url = new URL(req.url);
     const type = url.searchParams.get('type') || 'savings';
     
@@ -57,7 +61,7 @@ Tugas: Berikan analisis cerdas apakah rencana ini "Aman", "Mepet (Kritis)", atau
 `;
 
       const { text } = await generateText({
-        model: openrouter('google/gemma-4-26b-a4b-it:free'),
+        model: aiProvider(selectedModel),
         prompt,
         temperature: 0.3
       });
@@ -107,7 +111,7 @@ Tugas: Berikan 1-2 kalimat saran optimasi hemat yang sangat spesifik berdasarkan
       let recommendationText = '';
       try {
         const { text } = await generateText({
-          model: openrouter('google/gemma-4-26b-a4b-it:free'),
+          model: aiProvider(selectedModel),
           prompt,
           temperature: 0.3
         });

@@ -688,7 +688,7 @@ export async function actionCopyPreviousMonthBudget(data: {
 
   const { error: upsertErr } = await supabase
     .from('budgets')
-    .upsert(upsertRows, { onConflict: 'profile,category_id,month,year' });
+    .upsert(upsertRows, { onConflict: 'category_id,month,year,profile' });
 
   if (upsertErr) return { success: false, error: upsertErr.message };
 
