@@ -1,18 +1,12 @@
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://bbqzbfuoisswuluzlodj.supabase.co}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJicXpiZnVvaXNzd3VsdXpsb2RqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3NDYyMzksImV4cCI6MjA5ODMyMjIzOX0.VecCAWnnyWufssmFAHXvmI5tq5ujEv1x4A6NwCmwJEc}
-        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY:-}
+    image: ghcr.io/babayaga4523/keuangan:latest
     container_name: keuangan_app
     restart: always
     ports:
       - "3000:3000"
     env_file:
-      - .env.local
+      - .env
     environment:
       # Supabase
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://bbqzbfuoisswuluzlodj.supabase.co}
