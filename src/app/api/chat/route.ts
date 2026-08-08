@@ -532,7 +532,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
               baseURL: 'https://openrouter.ai/api/v1',
               apiKey: openrouterApiKey || apiKey,
             });
-            visionModelId = 'google/gemma-4-26b-a4b-it:free';
+            visionModelId = 'meta-llama/llama-3.2-11b-vision-instruct:free';
           }
 
           let visionResult;
@@ -546,7 +546,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
                 }
               ],
               temperature: 0.05,
-              maxTokens: 2000
+              maxTokens: 6000 // Increased to allow Qwen to finish thinking
             });
           } catch (groqVisionErr: any) {
             if (groqApiKey && openrouterApiKey) {
@@ -556,7 +556,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
                 apiKey: openrouterApiKey,
               });
               visionResult = await generateText({
-                model: fallbackProvider('google/gemma-4-26b-a4b-it:free'),
+                model: fallbackProvider('meta-llama/llama-3.2-11b-vision-instruct:free'),
                 messages: [
                   {
                     role: 'user',
