@@ -1,5 +1,6 @@
 import { streamText, generateText, tool, jsonSchema } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createServerClient } from '@/lib/supabase-server';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
@@ -447,17 +448,19 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
 
     console.time('AI Stream Connect');
 
+    const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
     const groqApiKey = process.env.GROQ_API_KEY;
     const openrouterApiKey = process.env.OPENROUTER_API_KEY;
-    const apiKey = groqApiKey || openrouterApiKey;
+    const apiKey = googleApiKey || groqApiKey || openrouterApiKey;
 
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'GROQ_API_KEY atau OPENROUTER_API_KEY belum dikonfigurasi di lingkungan server.' }), { status: 401 });
+      return new Response(JSON.stringify({ error: 'GOOGLE_GENERATIVE_AI_API_KEY, GROQ_API_KEY, atau OPENROUTER_API_KEY belum dikonfigurasi.' }), { status: 401 });
     }
 
+    const googleProvider = googleApiKey ? createGoogleGenerativeAI({ apiKey: googleApiKey }) : null;
     const aiProvider = createOpenAI({
       baseURL: groqApiKey ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1',
-      apiKey: apiKey,
+      apiKey: groqApiKey || openrouterApiKey || '',
     });
 
     // ========== TWO-PASS VISION: Pre-scan images with a lightweight call ==========
@@ -1428,11 +1431,14 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     const heavyKeywords = ['analisis', 'simulasi', 'proyeksi', 'investasi', 'strategi', 'evaluasi', 'breakdown', 'rekomendasi', 'perbandingan', 'rencana', 'iphone', 'jangka panjang', 'defisit', 'budget'];
     const isHeavyAnalysis = heavyKeywords.some(kw => lastMsgContent.includes(kw));
 
-    let primaryModel = groqApiKey ? 'llama-3.1-8b-instant' : 'openai/gpt-oss-20b:free';
+    let primaryModel = 'llama-3.1-8b-instant';
     let fallbackModel = groqApiKey ? 'llama-3.1-8b-instant' : 'openai/gpt-oss-20b:free';
     let selectedMode = 'GENERAL (Chat & Web Search)';
 
-    if (hasAttachments || isMultimodal) {
+    if (googleApiKey && googleProvider) {
+      primaryModel = 'gemini-1.5-flash';
+      selectedMode = (hasAttachments || isMultimodal) ? 'VISION (Gemini 1.5 Flash)' : isHeavyAnalysis ? 'HEAVY ANALYSIS (Gemini 1.5 Flash)' : 'GENERAL (Gemini 1.5 Flash)';
+    } else if (hasAttachments || isMultimodal) {
       selectedMode = 'VISION (OCR Struk Belanja)';
       primaryModel = groqApiKey ? 'qwen/qwen3.6-27b' : 'openai/gpt-oss-20b:free';
     } else if (isHeavyAnalysis) {
@@ -1443,7 +1449,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       primaryModel = groqApiKey ? 'llama-3.1-8b-instant' : 'openai/gpt-oss-20b:free';
     }
 
-    console.log(`[AI Router] Mode: ${selectedMode} | Model Target: ${primaryModel} (${groqApiKey ? 'Groq' : 'OpenRouter'})`);
+    console.log(`[AI Router] Mode: ${selectedMode} | Model Target: ${primaryModel} (${googleApiKey ? 'Google AI Studio' : groqApiKey ? 'Groq' : 'OpenRouter'})`);
 
     // Forward to n8n Webhook if configured (with non-blocking 300ms timeout)
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
@@ -1475,10 +1481,17 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       delete effectiveTools.extract_receipt_data;
     }
 
+    const getModelInstance = (modelName: string) => {
+      if (modelName.startsWith('gemini-') && googleProvider) {
+        return googleProvider(modelName);
+      }
+      return aiProvider(modelName);
+    };
+
     let result;
     try {
       result = await streamText({
-        model: aiProvider(primaryModel),
+        model: getModelInstance(primaryModel),
         system: systemInstructions,
         messages: recentMessages,
         temperature: 0.2,
