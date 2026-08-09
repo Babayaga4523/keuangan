@@ -599,6 +599,7 @@ const TransactionUpdateCard = ({ toolInvocation, onUpdate, categories }: { toolI
 
 const MemoizedMessageBubble = React.memo(({ 
   message, 
+  prevUserContent,
   isStreaming,
   categories,
   onSaveTransaction,
@@ -608,6 +609,7 @@ const MemoizedMessageBubble = React.memo(({
   showToast
 }: { 
   message: Message; 
+  prevUserContent?: string;
   isStreaming?: boolean;
   categories: any[];
   onSaveTransaction: (toolCallId: string, draftData: any, imageHash: string) => Promise<boolean>;
@@ -651,9 +653,8 @@ const MemoizedMessageBubble = React.memo(({
   };
 
   const getCleanQuery = () => {
-    const text = message.content || '';
-    // Strip markdown tags for search query
-    return text.replace(/[#*`_~]/g, '').trim().substring(0, 120);
+    const text = (prevUserContent && prevUserContent.trim() ? prevUserContent : message.content) || '';
+    return text.replace(/\[Gambar Terlampir:.*?\]/g, '').replace(/[#*`_~]/g, '').trim().substring(0, 120);
   };
 
   const isUser = message.role === 'user';
@@ -1634,11 +1635,15 @@ export default function AiChatInterface() {
               ) : (
                 /* Chat Message List */
                 <div className="max-w-4xl mx-auto space-y-6 w-full">
-                  {messages.map((message: Message, idx: number) => (
-                    <MemoizedMessageBubble 
-                      key={message.id} 
-                      message={message} 
-                      isStreaming={isLoading && idx === messages.length - 1 && message.role === 'assistant'}
+                  {messages.map((message: Message, idx: number) => {
+                    const prevMsg = idx > 0 ? messages[idx - 1] : null;
+                    const prevUserContent = message.role === 'assistant' && prevMsg?.role === 'user' ? prevMsg.content : '';
+                    return (
+                      <MemoizedMessageBubble 
+                        key={message.id} 
+                        message={message} 
+                        prevUserContent={prevUserContent}
+                        isStreaming={isLoading && idx === messages.length - 1 && message.role === 'assistant'}
                       categories={categories}
                       onSaveTransaction={handleSaveReceiptTransaction}
                       onDeleteTransaction={handleDeleteTransaction}
@@ -1655,7 +1660,8 @@ export default function AiChatInterface() {
                         toastTimeoutRef.current = setTimeout(() => setToastText(null), 3000);
                       }}
                     />
-                  ))}
+                  );
+                })}
                   
                   {isLoading && messages[messages.length - 1]?.role === 'user' && (
                     <div className="flex gap-4 group">
