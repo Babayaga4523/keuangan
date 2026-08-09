@@ -1421,15 +1421,18 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     const isHeavyAnalysis = heavyKeywords.some(kw => lastMsgContent.includes(kw));
 
     let primaryModel = groqApiKey ? 'llama-3.1-8b-instant' : 'openai/gpt-oss-20b:free';
-    let fallbackModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'openai/gpt-oss-20b:free';
-    let selectedMode = 'GENERAL';
+    let fallbackModel = groqApiKey ? 'llama-3.1-8b-instant' : 'openai/gpt-oss-20b:free';
+    let selectedMode = 'GENERAL (Chat & Web Search)';
 
     if (hasAttachments || isMultimodal) {
-      selectedMode = 'VISION (OCR Struk)';
+      selectedMode = 'VISION (OCR Struk Belanja)';
+      primaryModel = groqApiKey ? 'qwen/qwen3.6-27b' : 'openai/gpt-oss-20b:free';
     } else if (isHeavyAnalysis) {
       selectedMode = 'HEAVY ANALYSIS (Penalaran Mendalam)';
+      primaryModel = groqApiKey ? 'openai/gpt-oss-20b' : 'openai/gpt-oss-20b:free';
     } else {
-      selectedMode = 'GENERAL (Chat & Catat Cepat)';
+      selectedMode = 'GENERAL (Chat & Web Search)';
+      primaryModel = groqApiKey ? 'llama-3.1-8b-instant' : 'openai/gpt-oss-20b:free';
     }
 
     console.log(`[AI Router] Mode: ${selectedMode} | Model Target: ${primaryModel} (${groqApiKey ? 'Groq' : 'OpenRouter'})`);
@@ -1510,7 +1513,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
           system: systemInstructions,
           messages: recentMessages,
           temperature: 0.2,
-          tools: chatTools,
+          tools: effectiveTools,
           maxSteps: 5,
           abortSignal: req.signal,
           onFinish: onFinishCallback
