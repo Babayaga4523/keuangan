@@ -1468,6 +1468,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
         temperature: 0.2,
         tools: chatTools,
         maxSteps: 5,
+        abortSignal: req.signal,
         onFinish: onFinishCallback
       });
     } catch (err: any) {
@@ -1490,6 +1491,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
           temperature: 0.2,
           tools: chatTools,
           maxSteps: 5,
+          abortSignal: req.signal,
           onFinish: onFinishCallback
         });
       } else {
@@ -1501,15 +1503,24 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
           temperature: 0.2,
           tools: chatTools,
           maxSteps: 5,
+          abortSignal: req.signal,
           onFinish: onFinishCallback
         });
       }
     }
     console.timeEnd('AI Stream Connect');
 
-    return result.toDataStreamResponse();
+    return result.toDataStreamResponse({
+      getErrorMessage: (err: any) => {
+        console.error('Streaming API Error:', err);
+        return err?.message || String(err) || 'Terjadi kesalahan saat streaming data AI';
+      }
+    });
   } catch (error: any) {
     console.error('Chat API Error:', error);
-    return new Response(JSON.stringify({ error: error.message || 'Terjadi kesalahan sistem AI', stack: error.stack }), { status: 500 });
+    return new Response(error.message || 'Terjadi kesalahan sistem AI', { 
+      status: 500, 
+      headers: { 'Content-Type': 'text/plain' } 
+    });
   }
 }
