@@ -1436,8 +1436,8 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     let selectedMode = 'GENERAL (Chat & Web Search)';
 
     if (googleApiKey && googleProvider) {
-      primaryModel = 'gemini-1.5-flash';
-      selectedMode = (hasAttachments || isMultimodal) ? 'VISION (Gemini 1.5 Flash)' : isHeavyAnalysis ? 'HEAVY ANALYSIS (Gemini 1.5 Flash)' : 'GENERAL (Gemini 1.5 Flash)';
+      primaryModel = 'gemini-2.5-flash';
+      selectedMode = (hasAttachments || isMultimodal) ? 'VISION (Gemini 2.5 Flash)' : isHeavyAnalysis ? 'HEAVY ANALYSIS (Gemini 2.5 Flash)' : 'GENERAL (Gemini 2.5 Flash)';
     } else if (hasAttachments || isMultimodal) {
       selectedMode = 'VISION (OCR Struk Belanja)';
       primaryModel = groqApiKey ? 'qwen/qwen3.6-27b' : 'openai/gpt-oss-20b:free';
