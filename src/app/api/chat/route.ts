@@ -1420,8 +1420,8 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     const heavyKeywords = ['analisis', 'simulasi', 'proyeksi', 'investasi', 'strategi', 'evaluasi', 'breakdown', 'rekomendasi', 'perbandingan', 'rencana', 'iphone', 'jangka panjang', 'defisit', 'budget'];
     const isHeavyAnalysis = heavyKeywords.some(kw => lastMsgContent.includes(kw));
 
-    let primaryModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'openai/gpt-oss-20b:free';
-    let fallbackModel = groqApiKey ? 'llama-3.1-8b-instant' : 'openai/gpt-oss-20b:free';
+    let primaryModel = groqApiKey ? 'llama-3.1-8b-instant' : 'openai/gpt-oss-20b:free';
+    let fallbackModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'openai/gpt-oss-20b:free';
     let selectedMode = 'GENERAL';
 
     if (hasAttachments || isMultimodal) {
