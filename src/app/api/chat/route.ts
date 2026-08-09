@@ -1459,6 +1459,11 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       }
     }
 
+    const effectiveTools: Record<string, any> = { ...chatTools };
+    if (!hasAttachments && !isMultimodal) {
+      delete effectiveTools.extract_receipt_data;
+    }
+
     let result;
     try {
       result = await streamText({
@@ -1466,7 +1471,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
         system: systemInstructions,
         messages: recentMessages,
         temperature: 0.2,
-        tools: chatTools,
+        tools: effectiveTools,
         maxSteps: 5,
         abortSignal: req.signal,
         onFinish: onFinishCallback
@@ -1487,7 +1492,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
             system: systemInstructions,
             messages: recentMessages,
             temperature: 0.2,
-            tools: chatTools,
+            tools: effectiveTools,
             maxSteps: 5,
             abortSignal: req.signal,
             onFinish: onFinishCallback
