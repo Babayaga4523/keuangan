@@ -463,13 +463,11 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
       apiKey: groqApiKey || openrouterApiKey || '',
     });
 
-    // ========== TWO-PASS VISION: Pre-scan images with a lightweight call ==========
-    // GitHub Models has an 8000-token limit. The full system prompt + base64 image
-    // easily exceeds that. So we first "look" at the image with a tiny prompt,
-    // then feed the text description to the main chat (which has the full system prompt + tools).
+    // GitHub Models / Llama needed a two-pass pre-scan. Gemini 2.5 Flash handles multimodal images natively in 1 pass.
+    // So we only run pre-scan if googleApiKey is NOT set.
     const lastRecentMsg = recentMessages[recentMessages.length - 1];
     let visionDescription = '';
-    if (lastRecentMsg?.role === 'user' && Array.isArray(lastRecentMsg.content)) {
+    if (!googleApiKey && lastRecentMsg?.role === 'user' && Array.isArray(lastRecentMsg.content)) {
       const imageParts = lastRecentMsg.content.filter((p: any) => p.type === 'image');
       if (imageParts.length > 0) {
         try {
