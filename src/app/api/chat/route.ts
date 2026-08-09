@@ -370,10 +370,9 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
     }
 
     // Vercel AI SDK useChat automatically sends the FULL conversation history in `messages`.
-    // To prevent AI lag and save tokens on very long chats, we only send the last 5 messages for context.
-    // Groq free tier limit: 12,000 TPM. System prompt + tools alone ~9,000 tokens.
-    // Keep only last 3 messages to stay safely under the limit.
-    const recentMessages = messages.slice(-3).map((msg: any, idx: number, arr: any[]) => {
+    // Filter out standalone tool messages or non-standard roles that break Gemini turn sequence
+    const cleanHistory = messages.filter((m: any) => m.role === 'user' || m.role === 'assistant');
+    const recentMessages = cleanHistory.slice(-3).map((msg: any, idx: number, arr: any[]) => {
       const isLastMessage = idx === arr.length - 1;
 
       // If there are experimental attachments (specifically images), convert the message to a multimodal content array
@@ -435,6 +434,15 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
             content: textContent || "Tolong periksa dan analisis struk belanja ini."
           };
         }
+      } else if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+        const textContent = msg.content
+          .filter((part: any) => part.type === 'text')
+          .map((part: any) => part.text)
+          .join('\n');
+        formattedMsg = {
+          role: 'assistant',
+          content: textContent || ''
+        };
       }
 
       if (!isLastMessage && typeof formattedMsg.content === 'string' && formattedMsg.content.length > 400) {
@@ -1510,9 +1518,31 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       console.warn(`[AI Primary Error] Model ${primaryModel} failed:`, err.message || err);
       let fallbackSuccess = false;
 
-      if (openrouterApiKey) {
+      // Fallback 1: Groq (llama-3.1-8b-instant) if groqApiKey is set and primary was NOT groq
+      if (!fallbackSuccess && groqApiKey && !primaryModel.includes('llama') && !primaryModel.includes('qwen') && !primaryModel.includes('gpt-oss')) {
         try {
-          console.warn(`[AI Fallback 1] Groq limit or error, falling back to OpenRouter (openai/gpt-oss-20b:free)...`);
+          console.warn(`[AI Fallback 1] Primary model failed, falling back to Groq (llama-3.1-8b-instant)...`);
+          result = await streamText({
+            model: aiProvider('llama-3.1-8b-instant'),
+            system: systemInstructions,
+            messages: recentMessages,
+            temperature: 0.2,
+            tools: effectiveTools,
+            toolChoice: toolChoiceSetting,
+            maxSteps: 5,
+            abortSignal: req.signal,
+            onFinish: onFinishCallback
+          });
+          fallbackSuccess = true;
+        } catch (groqErr: any) {
+          console.warn(`[AI Fallback 1 Error] Groq fallback failed:`, groqErr.message || groqErr);
+        }
+      }
+
+      // Fallback 2: OpenRouter (openai/gpt-oss-20b:free)
+      if (!fallbackSuccess && openrouterApiKey) {
+        try {
+          console.warn(`[AI Fallback 2] Falling back to OpenRouter (openai/gpt-oss-20b:free)...`);
           const openrouterProvider = createOpenAI({
             baseURL: 'https://openrouter.ai/api/v1',
             apiKey: openrouterApiKey,
@@ -1530,12 +1560,12 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
           });
           fallbackSuccess = true;
         } catch (orErr: any) {
-          console.warn(`[AI Fallback 1 Error] OpenRouter fallback failed:`, orErr.message || orErr);
+          console.warn(`[AI Fallback 2 Error] OpenRouter fallback failed:`, orErr.message || orErr);
         }
       }
 
       if (!fallbackSuccess) {
-        console.warn(`[AI Fallback 2] Falling back to secondary Groq model (${fallbackModel})...`);
+        console.warn(`[AI Fallback 3] Falling back to secondary Groq model (${fallbackModel})...`);
         result = await streamText({
           model: aiProvider(fallbackModel),
           system: systemInstructions,
