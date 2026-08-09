@@ -410,6 +410,7 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
       }
 
       // Normalize standard multimodal parts to standard Vercel AI SDK CoreMessage format
+      let formattedMsg = msg;
       if (msg.role === 'user' && Array.isArray(msg.content)) {
         if (isLastMessage) {
           const newContent = msg.content.map((part: any) => {
@@ -421,20 +422,27 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
             }
             return part;
           });
-          return { ...msg, content: newContent };
+          formattedMsg = { ...msg, content: newContent };
         } else {
           // For past history messages, extract only text parts
           const textContent = msg.content
             .filter((part: any) => part.type === 'text')
             .map((part: any) => part.text)
             .join('\n');
-          return {
+          formattedMsg = {
             role: 'user',
             content: textContent || "Tolong periksa dan analisis struk belanja ini."
           };
         }
       }
-      return msg;
+
+      if (!isLastMessage && typeof formattedMsg.content === 'string' && formattedMsg.content.length > 400) {
+        formattedMsg = {
+          ...formattedMsg,
+          content: formattedMsg.content.substring(0, 400) + '...'
+        };
+      }
+      return formattedMsg;
     });
 
     console.time('AI Stream Connect');
