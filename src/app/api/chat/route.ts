@@ -528,11 +528,14 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
             ...imageParts
           ];
 
-          // Vision uses Groq qwen/qwen3.6-27b (multimodal, 250k TPM) when GROQ_API_KEY is set,
-          // falling back to OpenRouter Gemma if Groq vision fails or key is missing.
-          let visionProvider;
-          let visionModelId;
-          if (groqApiKey) {
+          // Vision uses Google Gemini 2.5 Flash if GOOGLE_GENERATIVE_AI_API_KEY is set,
+          // falling back to Groq qwen/qwen3.6-27b or OpenRouter gpt-oss-20b.
+          let visionProvider: any;
+          let visionModelId: string;
+          if (googleApiKey && googleProvider) {
+            visionProvider = googleProvider;
+            visionModelId = 'gemini-2.5-flash';
+          } else if (groqApiKey) {
             visionProvider = createOpenAI({
               baseURL: 'https://api.groq.com/openai/v1',
               apiKey: groqApiKey,
@@ -543,7 +546,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
               baseURL: 'https://openrouter.ai/api/v1',
               apiKey: openrouterApiKey || apiKey,
             });
-            visionModelId = 'meta-llama/llama-3.2-11b-vision-instruct:free';
+            visionModelId = 'openai/gpt-oss-20b:free';
           }
 
           let visionResult;
@@ -557,17 +560,17 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
                 }
               ],
               temperature: 0.05,
-              maxTokens: 6000 // Increased to allow Qwen to finish thinking
+              maxTokens: 6000
             });
-          } catch (groqVisionErr: any) {
-            if (groqApiKey && openrouterApiKey) {
-              console.warn('[Vision Pre-scan] Groq vision failed, trying OpenRouter fallback:', groqVisionErr.message);
+          } catch (visionErr: any) {
+            if (openrouterApiKey) {
+              console.warn('[Vision Pre-scan] Primary vision failed, trying OpenRouter fallback:', visionErr.message);
               const fallbackProvider = createOpenAI({
                 baseURL: 'https://openrouter.ai/api/v1',
                 apiKey: openrouterApiKey,
               });
               visionResult = await generateText({
-                model: fallbackProvider('meta-llama/llama-3.2-11b-vision-instruct:free'),
+                model: fallbackProvider('openai/gpt-oss-20b:free'),
                 messages: [
                   {
                     role: 'user',
@@ -578,7 +581,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
                 maxTokens: 2000
               });
             } else {
-              throw groqVisionErr;
+              throw visionErr;
             }
           }
           let rawVisionDescription = visionResult.text || '';
