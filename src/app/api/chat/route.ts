@@ -222,10 +222,10 @@ ${activeMemories.map((m: any) => `- [${m.category} - ID: ${m.id}] ${m.content}`)
 Jika pengguna menyuruh Anda mencatat sebuah transaksi NAMUN transaksi tersebut bertentangan atau melanggar preferensi/batasan/target pengeluaran yang tercatat di Memori, Anda **WAJIB menunda** pencatatan! Berikan peringatan terlebih dahulu via teks, ingatkan mereka tentang memori tersebut, dan tanyakan apakah mereka **tetap yakin** ingin mencatatnya. JANGAN panggil tool \`add_transaction\` sampai mereka secara eksplisit menjawab konfirmasi peringatan Anda (misal: "Ya, tetap catat").
 ` : '';
 
-    // Ringkasan transaksi terbaru
+    // Ringkasan transaksi terbaru (Maksimal 10 agar prompt ringan & tidak hit TPM limit)
     const recentSummary = allTransactions.length > 0
-      ? `\n## TRANSAKSI TERBARU (Maksimal 30):\n` +
-        allTransactions.slice(0, 30).map((t: any) => {
+      ? `\n## TRANSAKSI TERBARU (Maksimal 10):\n` +
+        allTransactions.slice(0, 10).map((t: any) => {
           const catName = dbCategories.find((c: any) => c.id === t.category_id)?.name || 'Lainnya';
           return `- ID: ${t.id} | [${t.type}] ${t.description} (${catName}): **${formatRp(t.amount)}** (${t.transaction_date})`;
         }).join('\n')
@@ -1420,8 +1420,8 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     const heavyKeywords = ['analisis', 'simulasi', 'proyeksi', 'investasi', 'strategi', 'evaluasi', 'breakdown', 'rekomendasi', 'perbandingan', 'rencana', 'iphone', 'jangka panjang', 'defisit', 'budget'];
     const isHeavyAnalysis = heavyKeywords.some(kw => lastMsgContent.includes(kw));
 
-    let primaryModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'meta-llama/llama-3.3-70b-instruct:free';
-    let fallbackModel = groqApiKey ? 'llama-3.1-8b-instant' : 'google/gemini-2.0-pro-exp-02-05:free';
+    let primaryModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'openai/gpt-oss-20b:free';
+    let fallbackModel = groqApiKey ? 'llama-3.1-8b-instant' : 'openai/gpt-oss-20b:free';
     let selectedMode = 'GENERAL';
 
     if (hasAttachments || isMultimodal) {
@@ -1472,30 +1472,34 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
         onFinish: onFinishCallback
       });
     } catch (err: any) {
-      const isRateLimitOrOverflow = (err as any)?.statusCode === 413 || 
-                                    (err as any)?.statusCode === 429 || 
-                                    (err as any)?.message?.toLowerCase().includes('too large') ||
-                                    (err as any)?.message?.toLowerCase().includes('rate limit');
-                                    
-      if (isRateLimitOrOverflow && openrouterApiKey) {
-        // Groq free tier TPM/TPD exceeded → fallback to OpenRouter
-        console.warn(`[AI Fallback] Groq limit exceeded (429/413), falling back to OpenRouter:`, err.message);
-        const openrouterProvider = createOpenAI({
-          baseURL: 'https://openrouter.ai/api/v1',
-          apiKey: openrouterApiKey,
-        });
-        result = await streamText({
-          model: openrouterProvider('meta-llama/llama-3.3-70b-instruct:free'),
-          system: systemInstructions,
-          messages: recentMessages,
-          temperature: 0.2,
-          tools: chatTools,
-          maxSteps: 5,
-          abortSignal: req.signal,
-          onFinish: onFinishCallback
-        });
-      } else {
-        console.warn(`Failed to call ${primaryModel}, falling back to ${fallbackModel}:`, err);
+      console.warn(`[AI Primary Error] Model ${primaryModel} failed:`, err.message || err);
+      let fallbackSuccess = false;
+
+      if (openrouterApiKey) {
+        try {
+          console.warn(`[AI Fallback 1] Groq limit or error, falling back to OpenRouter (openai/gpt-oss-20b:free)...`);
+          const openrouterProvider = createOpenAI({
+            baseURL: 'https://openrouter.ai/api/v1',
+            apiKey: openrouterApiKey,
+          });
+          result = await streamText({
+            model: openrouterProvider('openai/gpt-oss-20b:free'),
+            system: systemInstructions,
+            messages: recentMessages,
+            temperature: 0.2,
+            tools: chatTools,
+            maxSteps: 5,
+            abortSignal: req.signal,
+            onFinish: onFinishCallback
+          });
+          fallbackSuccess = true;
+        } catch (orErr: any) {
+          console.warn(`[AI Fallback 1 Error] OpenRouter fallback failed:`, orErr.message || orErr);
+        }
+      }
+
+      if (!fallbackSuccess) {
+        console.warn(`[AI Fallback 2] Falling back to secondary Groq model (${fallbackModel})...`);
         result = await streamText({
           model: aiProvider(fallbackModel),
           system: systemInstructions,
@@ -1509,6 +1513,10 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       }
     }
     console.timeEnd('AI Stream Connect');
+
+    if (!result) {
+      throw new Error('Gagal terhubung ke semua provider AI (Groq & OpenRouter). Silakan coba beberapa saat lagi.');
+    }
 
     return result.toDataStreamResponse({
       getErrorMessage: (err: any) => {
