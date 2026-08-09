@@ -1484,6 +1484,10 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       delete effectiveTools.extract_receipt_data;
     }
 
+    const toolChoiceSetting: any = (hasAttachments || isMultimodal) && effectiveTools.extract_receipt_data
+      ? { type: 'tool', toolName: 'extract_receipt_data' }
+      : 'auto';
+
     const getModelInstance = (modelName: string) => {
       if (modelName.startsWith('gemini-') && googleProvider) {
         return googleProvider(modelName);
@@ -1499,6 +1503,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
         messages: recentMessages,
         temperature: 0.2,
         tools: effectiveTools,
+        toolChoice: toolChoiceSetting,
         maxSteps: 5,
         abortSignal: req.signal,
         onFinish: onFinishCallback
@@ -1520,6 +1525,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
             messages: recentMessages,
             temperature: 0.2,
             tools: effectiveTools,
+            toolChoice: toolChoiceSetting,
             maxSteps: 5,
             abortSignal: req.signal,
             onFinish: onFinishCallback
@@ -1538,6 +1544,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
           messages: recentMessages,
           temperature: 0.2,
           tools: effectiveTools,
+          toolChoice: toolChoiceSetting,
           maxSteps: 5,
           abortSignal: req.signal,
           onFinish: onFinishCallback

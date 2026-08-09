@@ -696,7 +696,15 @@ const MemoizedMessageBubble = React.memo(({
           >
           {isUser ? (
             <div className="space-y-2">
-              <p className="whitespace-pre-wrap">{message.content}</p>
+              <p className="whitespace-pre-wrap">
+                {message.content ? message.content.replace(/\[Gambar Terlampir:.*?\]/g, '').trim() : ''}
+              </p>
+              {message.content && message.content.includes('[Gambar Terlampir:') && (!message.experimental_attachments || message.experimental_attachments.length === 0) && (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/10 rounded-lg text-[11px] text-slate-300 border border-white/15">
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  <span>Gambar Terlampir</span>
+                </div>
+              )}
               {message.experimental_attachments && message.experimental_attachments.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {message.experimental_attachments.map((att, idx) => (
