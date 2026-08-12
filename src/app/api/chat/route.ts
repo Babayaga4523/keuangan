@@ -17,7 +17,7 @@ function formatRp(val: string | number) {
 
 export async function POST(req: Request) {
   try {
-    const { messages, sessionId } = await req.json();
+    const { messages, sessionId, selectedModel } = await req.json();
 
     // 1. Validasi Berkas & Deteksi Duplikat di Sisi Server (Early Check)
     if (messages && messages.length > 0) {
@@ -1441,24 +1441,26 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     const isHeavyAnalysis = heavyKeywords.some(kw => lastMsgContent.includes(kw));
 
     let primaryModel = 'llama-3.1-8b-instant';
-    let fallbackModel = groqApiKey ? 'llama-3.1-8b-instant' : 'openai/gpt-oss-20b:free';
     let selectedMode = 'GENERAL (Chat & Web Search)';
 
-    if (googleApiKey && googleProvider) {
+    if (selectedModel && selectedModel !== 'auto') {
+      primaryModel = selectedModel;
+      selectedMode = `USER SELECTED (${selectedModel})`;
+    } else if (googleApiKey && googleProvider) {
       primaryModel = 'gemini-2.5-flash';
       selectedMode = (hasAttachments || isMultimodal) ? 'VISION (Gemini 2.5 Flash)' : isHeavyAnalysis ? 'HEAVY ANALYSIS (Gemini 2.5 Flash)' : 'GENERAL (Gemini 2.5 Flash)';
     } else if (hasAttachments || isMultimodal) {
       selectedMode = 'VISION (OCR Struk Belanja)';
-      primaryModel = groqApiKey ? 'qwen/qwen3.6-27b' : 'openai/gpt-oss-20b:free';
+      primaryModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'openai/gpt-oss-20b:free';
     } else if (isHeavyAnalysis) {
       selectedMode = 'HEAVY ANALYSIS (Penalaran Mendalam)';
-      primaryModel = groqApiKey ? 'openai/gpt-oss-20b' : 'openai/gpt-oss-20b:free';
+      primaryModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'openai/gpt-oss-20b:free';
     } else {
       selectedMode = 'GENERAL (Chat & Web Search)';
       primaryModel = groqApiKey ? 'llama-3.1-8b-instant' : 'openai/gpt-oss-20b:free';
     }
 
-    console.log(`[AI Router] Mode: ${selectedMode} | Model Target: ${primaryModel} (${googleApiKey ? 'Google AI Studio' : groqApiKey ? 'Groq' : 'OpenRouter'})`);
+    console.log(`[AI Router] Mode: ${selectedMode} | Model Target: ${primaryModel}`);
 
     // Forward to n8n Webhook if configured (with non-blocking 300ms timeout)
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
@@ -1498,6 +1500,13 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       if (modelName.startsWith('gemini-') && googleProvider) {
         return googleProvider(modelName);
       }
+      if (modelName.includes('/') && openrouterApiKey) {
+        const openrouterProvider = createOpenAI({
+          baseURL: 'https://openrouter.ai/api/v1',
+          apiKey: openrouterApiKey,
+        });
+        return openrouterProvider(modelName);
+      }
       return aiProvider(modelName);
     };
 
@@ -1515,15 +1524,24 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
         onFinish: onFinishCallback
       });
     } catch (err: any) {
-      console.warn(`[AI Primary Error] Model ${primaryModel} failed:`, err.message || err);
+      console.warn(`[AI Primary Error] Target Model ${primaryModel} failed or rate limited (429):`, err.message || err);
+      
+      // Auto-fallback cascade in order of availability
+      const fallbackCascade = [
+        googleApiKey && 'gemini-2.5-flash',
+        groqApiKey && 'llama-3.3-70b-versatile',
+        groqApiKey && 'llama-3.1-8b-instant',
+        openrouterApiKey && 'openai/gpt-oss-20b:free',
+        openrouterApiKey && 'deepseek/deepseek-r1:free',
+      ].filter(Boolean) as string[];
+
       let fallbackSuccess = false;
-
-      // Fallback 1: Groq (llama-3.1-8b-instant) if groqApiKey is set and primary was NOT groq
-      if (!fallbackSuccess && groqApiKey && !primaryModel.includes('llama') && !primaryModel.includes('qwen') && !primaryModel.includes('gpt-oss')) {
+      for (const altModel of fallbackCascade) {
+        if (altModel === primaryModel) continue; // Skip failed model
         try {
-          console.warn(`[AI Fallback 1] Primary model failed, falling back to Groq (llama-3.1-8b-instant)...`);
+          console.warn(`[AI Auto-Fallback] Switching to available model: ${altModel}`);
           result = await streamText({
-            model: aiProvider('llama-3.1-8b-instant'),
+            model: getModelInstance(altModel),
             system: systemInstructions,
             messages: recentMessages,
             temperature: 0.2,
@@ -1534,49 +1552,10 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
             onFinish: onFinishCallback
           });
           fallbackSuccess = true;
-        } catch (groqErr: any) {
-          console.warn(`[AI Fallback 1 Error] Groq fallback failed:`, groqErr.message || groqErr);
+          break;
+        } catch (altErr: any) {
+          console.warn(`[AI Fallback Error] Model ${altModel} failed:`, altErr.message || altErr);
         }
-      }
-
-      // Fallback 2: OpenRouter (openai/gpt-oss-20b:free)
-      if (!fallbackSuccess && openrouterApiKey) {
-        try {
-          console.warn(`[AI Fallback 2] Falling back to OpenRouter (openai/gpt-oss-20b:free)...`);
-          const openrouterProvider = createOpenAI({
-            baseURL: 'https://openrouter.ai/api/v1',
-            apiKey: openrouterApiKey,
-          });
-          result = await streamText({
-            model: openrouterProvider('openai/gpt-oss-20b:free'),
-            system: systemInstructions,
-            messages: recentMessages,
-            temperature: 0.2,
-            tools: effectiveTools,
-            toolChoice: toolChoiceSetting,
-            maxSteps: 5,
-            abortSignal: req.signal,
-            onFinish: onFinishCallback
-          });
-          fallbackSuccess = true;
-        } catch (orErr: any) {
-          console.warn(`[AI Fallback 2 Error] OpenRouter fallback failed:`, orErr.message || orErr);
-        }
-      }
-
-      if (!fallbackSuccess) {
-        console.warn(`[AI Fallback 3] Falling back to secondary Groq model (${fallbackModel})...`);
-        result = await streamText({
-          model: aiProvider(fallbackModel),
-          system: systemInstructions,
-          messages: recentMessages,
-          temperature: 0.2,
-          tools: effectiveTools,
-          toolChoice: toolChoiceSetting,
-          maxSteps: 5,
-          abortSignal: req.signal,
-          onFinish: onFinishCallback
-        });
       }
     }
     console.timeEnd('AI Stream Connect');

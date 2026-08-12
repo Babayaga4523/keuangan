@@ -1066,9 +1066,27 @@ export default function AiChatInterface() {
     }
   };
 
+  const [selectedModel, setSelectedModel] = useState<string>('auto');
+  const [modelDropdownOpen, setModelDropdownOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('user_preferred_ai_model');
+      if (saved) setSelectedModel(saved);
+    }
+  }, []);
+
+  const handleSelectModel = (modelId: string) => {
+    setSelectedModel(modelId);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('user_preferred_ai_model', modelId);
+    }
+    setModelDropdownOpen(false);
+  };
+
   const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages, error, setInput, append, reload } = useChat({
     api: '/api/chat',
-    body: { sessionId: currentSessionId },
+    body: { sessionId: currentSessionId, selectedModel },
     initialMessages: [],
     maxSteps: 5
   });
@@ -1564,12 +1582,117 @@ export default function AiChatInterface() {
               <Menu className="h-5 w-5" />
             </button>
 
-            {/* Pemilih Model (Gemini Model Selector Pill) */}
-            <button className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#f0f4f9] hover:bg-[#e1e6ed] text-slate-800 text-xs font-bold transition-all border border-slate-200/60 shadow-2xs">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-              <span>Opin AI (Gemini 1.5 Flash)</span>
-              <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
-            </button>
+            {/* Pemilih Model AI Dropdown */}
+            <div className="relative">
+              <button 
+                onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#f0f4f9] hover:bg-[#e1e6ed] text-slate-800 text-xs font-bold transition-all border border-slate-200/60 shadow-2xs"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                <span>
+                  {selectedModel === 'auto' && '🤖 Auto (Smart Fallback)'}
+                  {selectedModel === 'gemini-2.5-flash' && '⚡ Gemini 2.5 Flash'}
+                  {selectedModel === 'llama-3.3-70b-versatile' && '🚀 Groq Llama 3.3 70B'}
+                  {selectedModel === 'llama-3.1-8b-instant' && '⚡ Groq Llama 3.1 8B'}
+                  {selectedModel === 'openai/gpt-oss-20b:free' && '🆓 OpenRouter GPT-OSS'}
+                  {selectedModel === 'deepseek/deepseek-r1:free' && '🧠 OpenRouter DeepSeek R1'}
+                </span>
+                <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
+              </button>
+
+              {modelDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setModelDropdownOpen(false)} />
+                  <div className="absolute top-10 left-0 w-64 bg-white rounded-2xl border border-slate-200 shadow-xl p-2 z-50 text-xs space-y-1 animate-in fade-in slide-in-from-top-2 duration-150">
+                    <p className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1">Pilih Engine AI Utama</p>
+                    
+                    <button 
+                      onClick={() => handleSelectModel('auto')}
+                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors ${selectedModel === 'auto' ? 'bg-blue-50 text-blue-900 font-bold' : 'hover:bg-slate-50 text-slate-700'}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>🤖</span>
+                        <div>
+                          <p className="font-bold">Auto (Smart Switch)</p>
+                          <p className="text-[10px] text-slate-400 font-normal">Otomatis pindah jika limit</p>
+                        </div>
+                      </div>
+                      {selectedModel === 'auto' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </button>
+
+                    <button 
+                      onClick={() => handleSelectModel('gemini-2.5-flash')}
+                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors ${selectedModel === 'gemini-2.5-flash' ? 'bg-blue-50 text-blue-900 font-bold' : 'hover:bg-slate-50 text-slate-700'}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>⚡</span>
+                        <div>
+                          <p className="font-bold">Google Gemini 2.5 Flash</p>
+                          <p className="text-[10px] text-slate-400 font-normal">Multimodal & Cepat</p>
+                        </div>
+                      </div>
+                      {selectedModel === 'gemini-2.5-flash' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </button>
+
+                    <button 
+                      onClick={() => handleSelectModel('llama-3.3-70b-versatile')}
+                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors ${selectedModel === 'llama-3.3-70b-versatile' ? 'bg-blue-50 text-blue-900 font-bold' : 'hover:bg-slate-50 text-slate-700'}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>🚀</span>
+                        <div>
+                          <p className="font-bold">Groq Llama 3.3 70B</p>
+                          <p className="text-[10px] text-slate-400 font-normal">Penalaran Mendalam</p>
+                        </div>
+                      </div>
+                      {selectedModel === 'llama-3.3-70b-versatile' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </button>
+
+                    <button 
+                      onClick={() => handleSelectModel('llama-3.1-8b-instant')}
+                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors ${selectedModel === 'llama-3.1-8b-instant' ? 'bg-blue-50 text-blue-900 font-bold' : 'hover:bg-slate-50 text-slate-700'}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>⚡</span>
+                        <div>
+                          <p className="font-bold">Groq Llama 3.1 8B</p>
+                          <p className="text-[10px] text-slate-400 font-normal">Respons Instant</p>
+                        </div>
+                      </div>
+                      {selectedModel === 'llama-3.1-8b-instant' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </button>
+
+                    <button 
+                      onClick={() => handleSelectModel('openai/gpt-oss-20b:free')}
+                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors ${selectedModel === 'openai/gpt-oss-20b:free' ? 'bg-blue-50 text-blue-900 font-bold' : 'hover:bg-slate-50 text-slate-700'}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>🆓</span>
+                        <div>
+                          <p className="font-bold">OpenRouter GPT-OSS 20B</p>
+                          <p className="text-[10px] text-slate-400 font-normal">Free Cadangan</p>
+                        </div>
+                      </div>
+                      {selectedModel === 'openai/gpt-oss-20b:free' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </button>
+
+                    <button 
+                      onClick={() => handleSelectModel('deepseek/deepseek-r1:free')}
+                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors ${selectedModel === 'deepseek/deepseek-r1:free' ? 'bg-blue-50 text-blue-900 font-bold' : 'hover:bg-slate-50 text-slate-700'}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>🧠</span>
+                        <div>
+                          <p className="font-bold">OpenRouter DeepSeek R1</p>
+                          <p className="text-[10px] text-slate-400 font-normal">Deep Reasoning</p>
+                        </div>
+                      </div>
+                      {selectedModel === 'deepseek/deepseek-r1:free' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
