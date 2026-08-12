@@ -1587,58 +1587,69 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       return aiProvider(modelName);
     };
 
-    let result;
-    try {
-      result = await streamText({
-        model: getModelInstance(primaryModel),
-        system: systemInstructions,
-        messages: recentMessages,
-        temperature: 0.2,
-        tools: effectiveTools,
-        toolChoice: toolChoiceSetting,
-        maxSteps: 5,
-        abortSignal: req.signal,
-        onFinish: onFinishCallback
-      });
-    } catch (err: any) {
-      console.warn(`[AI Primary Error] Target Model ${primaryModel} failed or rate limited (429):`, err.message || err);
-      
-      // Auto-fallback cascade in order of availability
-      const fallbackCascade = [
-        googleApiKey && 'gemini-2.5-flash',
-        groqApiKey && 'llama-3.3-70b-versatile',
-        groqApiKey && 'llama-3.1-8b-instant',
-        openrouterApiKey && 'openai/gpt-oss-20b:free',
-        openrouterApiKey && 'deepseek/deepseek-r1:free',
-      ].filter(Boolean) as string[];
+    // Daftar urutan fallback model
+    const candidateModels = [
+      primaryModel,
+      googleApiKey && 'gemini-2.5-flash',
+      groqApiKey && 'llama-3.3-70b-versatile',
+      groqApiKey && 'llama-3.1-8b-instant',
+      openrouterApiKey && 'openai/gpt-oss-20b:free',
+      openrouterApiKey && 'deepseek/deepseek-r1:free',
+    ].filter(Boolean) as string[];
 
-      let fallbackSuccess = false;
-      for (const altModel of fallbackCascade) {
-        if (altModel === primaryModel) continue; // Skip failed model
-        try {
-          console.warn(`[AI Auto-Fallback] Switching to available model: ${altModel}`);
-          result = await streamText({
-            model: getModelInstance(altModel),
-            system: systemInstructions,
-            messages: recentMessages,
-            temperature: 0.2,
-            tools: effectiveTools,
-            toolChoice: toolChoiceSetting,
-            maxSteps: 5,
-            abortSignal: req.signal,
-            onFinish: onFinishCallback
-          });
-          fallbackSuccess = true;
-          break;
-        } catch (altErr: any) {
-          console.warn(`[AI Fallback Error] Model ${altModel} failed:`, altErr.message || altErr);
+    const modelsToTry = Array.from(new Set(candidateModels));
+
+    let result: any = null;
+    let activeModelUsed = primaryModel;
+
+    for (const modelName of modelsToTry) {
+      try {
+        console.log(`[AI Router] Attempting stream with model: ${modelName}`);
+
+        const currentTools = { ...effectiveTools };
+        const supportsTools = ['gemini', 'llama-3.3-70b', 'deepseek', 'openai', 'gpt'].some(m => modelName.includes(m));
+        if (!supportsTools) {
+          delete currentTools.web_search;
         }
+
+        const candidateResult = await streamText({
+          model: getModelInstance(modelName),
+          system: systemInstructions,
+          messages: recentMessages,
+          temperature: 0.2,
+          tools: currentTools,
+          toolChoice: toolChoiceSetting,
+          maxSteps: 5,
+          abortSignal: req.signal,
+          onFinish: onFinishCallback
+        });
+
+        // Mengintip chunk pertama stream untuk menguji 429 Rate Limit sebelum merespons HTTP ke browser
+        const reader = candidateResult.fullStream[Symbol.asyncIterator]();
+        const firstChunkResult = await Promise.race([
+          reader.next(),
+          new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 1200))
+        ]) as any;
+
+        if (firstChunkResult && firstChunkResult.value && firstChunkResult.value.type === 'error') {
+          const errObj = firstChunkResult.value.error;
+          const errMsg = String(errObj?.message || errObj || '');
+          console.warn(`[AI Router] Model ${modelName} emitted 429/Quota error: ${errMsg}`);
+          continue; // Pindah ke model berikutnya di fallback cascade!
+        }
+
+        result = candidateResult;
+        activeModelUsed = modelName;
+        console.log(`[AI Router] ✅ Successfully connected to stream with active model: ${modelName}`);
+        break;
+      } catch (err: any) {
+        console.warn(`[AI Router] Model ${modelName} failed initialization:`, err.message || err);
       }
     }
     console.timeEnd('AI Stream Connect');
 
     if (!result) {
-      throw new Error('Gagal terhubung ke semua provider AI (Groq & OpenRouter). Silakan coba beberapa saat lagi.');
+      throw new Error('Semua provider AI (Gemini, Groq, OpenRouter) sedang mencapai limit kuota (429). Silakan coba beberapa saat lagi.');
     }
 
     return result.toDataStreamResponse({
