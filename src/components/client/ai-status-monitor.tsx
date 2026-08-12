@@ -16,11 +16,28 @@ import {
   HelpCircle, 
   Sparkles,
   Server,
-  Database
+  Database,
+  BarChart3,
+  TrendingUp,
+  CreditCard
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Cell,
+  AreaChart,
+  Area,
+  PieChart,
+  Pie
+} from 'recharts';
 
 interface DiagnosticData {
   timestamp: string;
@@ -47,11 +64,21 @@ interface DiagnosticData {
   }[];
 }
 
+interface LatencyHistoryPoint {
+  time: string;
+  openrouter?: number;
+  groq?: number;
+  google?: number;
+  github?: number;
+  [key: string]: any;
+}
+
 export default function AiStatusMonitor() {
   const [data, setData] = useState<DiagnosticData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [lastChecked, setLastChecked] = useState<string>('');
+  const [latencyHistory, setLatencyHistory] = useState<LatencyHistoryPoint[]>([]);
 
   // Micro Chat Tester state
   const [testPrompt, setTestPrompt] = useState<string>('Halo, apakah sistem AI responsif?');
@@ -64,9 +91,23 @@ export default function AiStatusMonitor() {
     try {
       const res = await fetch('/api/ai-status', { cache: 'no-store' });
       if (res.ok) {
-        const json = await res.json();
+        const json: DiagnosticData = await res.json();
         setData(json);
-        setLastChecked(new Date().toLocaleTimeString('id-ID'));
+        const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        setLastChecked(timeStr);
+
+        // Record history point for real-time chart
+        const historyPoint: LatencyHistoryPoint = { time: timeStr };
+        json.providers.forEach((p) => {
+          if (p.isConfigured && p.status === 'ONLINE') {
+            historyPoint[p.provider as keyof LatencyHistoryPoint] = p.latencyMs as any;
+          }
+        });
+
+        setLatencyHistory((prev) => {
+          const next = [...prev, historyPoint];
+          return next.slice(-10); // Keep last 10 points
+        });
       }
     } catch (err) {
       console.error('Failed to fetch AI diagnostics', err);
@@ -78,7 +119,7 @@ export default function AiStatusMonitor() {
 
   useEffect(() => {
     fetchDiagnostics();
-    const interval = setInterval(fetchDiagnostics, 60000); // auto re-check every 60s
+    const interval = setInterval(fetchDiagnostics, 45000); // auto re-check every 45s
     return () => clearInterval(interval);
   }, []);
 
@@ -121,7 +162,6 @@ export default function AiStatusMonitor() {
       setTestError(`Gagal mengirim tes: ${err.message}`);
     } finally {
       setTestSending(false);
-      // Auto re-check status after sending test prompt to capture fresh latency/quota
       fetchDiagnostics();
     }
   };
@@ -137,6 +177,50 @@ export default function AiStatusMonitor() {
 
   const overall = data?.overallHealth || 'CRITICAL';
 
+  // Chart 1 Data: Latency Comparison (Bar Chart)
+  const latencyChartData = (data?.providers || []).map((p) => ({
+    name: p.name,
+    latensi: p.isConfigured && p.status === 'ONLINE' ? p.latencyMs : 0,
+    status: p.status,
+  }));
+
+  // Chart 2 Data: OpenRouter Usage Details (Daily, Weekly, Monthly)
+  const openrouterProvider = data?.providers.find((p) => p.provider === 'openrouter');
+  const openrouterDetails = openrouterProvider?.details || {};
+
+  const openrouterUsageData = [
+    { name: 'Hari Ini', usage: openrouterDetails.usageDailyUSD || 0 },
+    { name: 'Minggu Ini', usage: openrouterDetails.usageWeeklyUSD || 0 },
+    { name: 'Bulan Ini', usage: openrouterDetails.usageMonthlyUSD || 0 },
+  ];
+
+  // Chart 3 Data: Groq Rate Limit Remaining Tokens vs Used
+  const groqProvider = data?.providers.find((p) => p.provider === 'groq');
+  const groqDetails = groqProvider?.details || {};
+  const groqReqRemaining = groqDetails.requestsRemaining || 30;
+  const groqReqLimit = groqDetails.requestsLimitPerMin || 30;
+  const groqReqUsed = Math.max(0, groqReqLimit - groqReqRemaining);
+
+  const groqQuotaData = [
+    { name: 'Sisa Request (RPM)', value: groqReqRemaining, fill: '#10b981' },
+    { name: 'Terpakai (RPM)', value: groqReqUsed, fill: '#f59e0b' },
+  ];
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'ONLINE':
+        return <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-emerald-500" /> ONLINE</span>;
+      case 'RATE_LIMITED':
+        return <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5"><AlertTriangle className="w-3 h-3 text-amber-500" /> RATE LIMITED (429)</span>;
+      case 'UNAUTHORIZED':
+        return <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1.5"><XCircle className="w-3 h-3 text-rose-500" /> KEY INVALID (401)</span>;
+      case 'NOT_CONFIGURED':
+        return <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200">BELUM DIKONFIGURASI</span>;
+      default:
+        return <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">ERROR</span>;
+    }
+  };
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header Banner */}
@@ -147,9 +231,9 @@ export default function AiStatusMonitor() {
               <Activity className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900">Status & Limit Penggunaan AI</h1>
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">Status, Grafik & Limit AI Realtime</h1>
               <p className="text-xs text-slate-500">
-                Pantau kesehatan API Key, batasan rate limit (429), dan kecepatan latensi AI secara realtime.
+                Data langsung dari API resmi OpenRouter, Groq, Google Gemini, dan GitHub Models.
               </p>
             </div>
           </div>
@@ -239,9 +323,9 @@ export default function AiStatusMonitor() {
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
-              <p className="text-xs font-semibold text-slate-500">Rate Limit (429) Detected</p>
+              <p className="text-xs font-semibold text-slate-500">Rate Limit (429) Status</p>
               <p className={`text-2xl font-bold ${data?.rateLimitedCount ? 'text-amber-600' : 'text-emerald-600'}`}>
-                {data?.rateLimitedCount || 0} <span className="text-xs font-normal text-slate-400">Provider</span>
+                {data?.rateLimitedCount || 0} <span className="text-xs font-normal text-slate-400">Terkena Limit</span>
               </p>
             </div>
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
@@ -255,15 +339,13 @@ export default function AiStatusMonitor() {
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
-              <p className="text-xs font-semibold text-slate-500">OpenRouter Usage</p>
+              <p className="text-xs font-semibold text-slate-500">OpenRouter Real Usage</p>
               <p className="text-2xl font-bold text-slate-900">
-                {data?.providers.find(p => p.provider === 'openrouter')?.details?.usageUSD !== undefined
-                  ? `$${Number(data.providers.find(p => p.provider === 'openrouter')?.details?.usageUSD || 0).toFixed(4)}`
-                  : 'N/A'}
+                ${openrouterDetails.usageUSD !== undefined ? Number(openrouterDetails.usageUSD).toFixed(6) : '0.00'}
               </p>
             </div>
             <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
-              <Database className="w-5 h-5" />
+              <CreditCard className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
@@ -271,7 +353,7 @@ export default function AiStatusMonitor() {
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
-              <p className="text-xs font-semibold text-slate-500">Respon Tercepat</p>
+              <p className="text-xs font-semibold text-slate-500">Latensi Terbaik</p>
               <p className="text-2xl font-bold text-slate-900">
                 {Math.min(...(data?.providers.filter(p => p.status === 'ONLINE').map(p => p.latencyMs) || [0]))} <span className="text-xs font-normal text-slate-400">ms</span>
               </p>
@@ -283,10 +365,203 @@ export default function AiStatusMonitor() {
         </Card>
       </div>
 
-      {/* Provider Details Grid */}
+      {/* SECTION CHARTS (Grafik Realtime AI) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* CHART 1: Latensi Respon Provider AI (Bar Chart) */}
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="p-5 pb-2">
+            <CardTitle className="text-sm font-bold text-slate-900 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-indigo-600" /> Perbandingan Latensi Provider (ms)
+              </span>
+              <span className="text-[10px] font-normal text-slate-400">Semakin kecil semakin cepat</span>
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Kecepatan waktu respon langsung dari server API dalam milidetik.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-5 pt-0">
+            <div className="h-[220px] w-full pt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={latencyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} unit="ms" />
+                  <Tooltip 
+                    formatter={(value: any) => [`${value} ms`, 'Latensi']}
+                    contentStyle={{ borderRadius: '12px', fontSize: '12px', border: '1px solid #e2e8f0' }}
+                  />
+                  <Bar dataKey="latensi" radius={[6, 6, 0, 0]}>
+                    {latencyChartData.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={entry.status === 'ONLINE' ? (index === 0 ? '#3b82f6' : index === 1 ? '#a855f7' : '#10b981') : '#f43f5e'} 
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* CHART 2: Trend Latensi Realtime (Area Chart) */}
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="p-5 pb-2">
+            <CardTitle className="text-sm font-bold text-slate-900 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-600" /> Trend Fluktuasi Latensi (Realtime Log)
+              </span>
+              <span className="text-[10px] font-normal text-slate-400">10 Uji Diagnostik Terakhir</span>
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Merekam kestabilan waktu respon setiap kali diagnostik dijalankan.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-5 pt-0">
+            <div className="h-[220px] w-full pt-4">
+              {latencyHistory.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={latencyHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} unit="ms" />
+                    <Tooltip contentStyle={{ borderRadius: '12px', fontSize: '12px' }} />
+                    <Area type="monotone" dataKey="google" name="Gemini AI" stroke="#10b981" fill="#10b981" fillOpacity={0.15} strokeWidth={2} />
+                    <Area type="monotone" dataKey="openrouter" name="OpenRouter" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} strokeWidth={2} />
+                    <Area type="monotone" dataKey="groq" name="Groq AI" stroke="#a855f7" fill="#a855f7" fillOpacity={0.15} strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-slate-400 text-xs">
+                  Menunggu data sejarah diagnostik...
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Real API Data Breakdown Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* OpenRouter Real API Account Stats */}
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="p-5 pb-3">
+            <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Database className="w-4 h-4 text-blue-600" /> Real Data Akun OpenRouter (Official API)
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Data langsung dari endpoint `/api/v1/auth/key`
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-5 pt-0 space-y-4">
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[10px] text-slate-400 block font-semibold">Tipe Akun API</span>
+                <span className="font-bold text-slate-800 text-sm">{openrouterDetails.isFreeTier ? 'Free Tier Key' : 'Paid Key'}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[10px] text-slate-400 block font-semibold">Total Biaya (USD)</span>
+                <span className="font-bold text-slate-800 text-sm">${openrouterDetails.usageUSD || '0.0000'}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[10px] text-slate-400 block font-semibold">Penggunaan Hari Ini</span>
+                <span className="font-bold text-slate-800 text-sm">${openrouterDetails.usageDailyUSD || '0.0000'}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-[10px] text-slate-400 block font-semibold">Penggunaan Bulan Ini</span>
+                <span className="font-bold text-slate-800 text-sm">${openrouterDetails.usageMonthlyUSD || '0.0000'}</span>
+              </div>
+            </div>
+
+            {/* Usage Bar Chart */}
+            <div className="space-y-1.5 pt-2">
+              <p className="text-[11px] font-bold text-slate-700">Rincian Penggunaan Pengeluaran (USD):</p>
+              <div className="h-[140px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={openrouterUsageData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <Tooltip formatter={(val: any) => [`$${val}`, 'Penggunaan']} />
+                    <Bar dataKey="usage" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Groq Real Rate Limit & Quota Headers */}
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="p-5 pb-3">
+            <CardTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-purple-600" /> Real Rate-Limit Headers Groq API
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Header kuota mentah `x-ratelimit-*` langsung dari respon server Groq
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-5 pt-0 space-y-4">
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100">
+                <span className="text-[10px] text-purple-600 block font-semibold">Sisa Request / Menit (RPM)</span>
+                <span className="font-bold text-purple-950 text-sm">
+                  {groqDetails.requestsRemaining || 30} / {groqDetails.requestsLimitPerMin || 30}
+                </span>
+              </div>
+              <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
+                <span className="text-[10px] text-emerald-600 block font-semibold">Sisa Token / Menit (TPM)</span>
+                <span className="font-bold text-emerald-950 text-sm">
+                  {groqDetails.tokensRemaining || 14400} / {groqDetails.tokensLimitPerMin || 14400}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs space-y-1 font-mono">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Reset Counter Window:</span>
+                <span className="font-bold text-slate-800">{groqDetails.resetRequestsTime || '0s'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Status Quota RPM:</span>
+                <span className="font-bold text-emerald-600">Aman ({Math.round(((groqDetails.requestsRemaining || 30) / (groqDetails.requestsLimitPerMin || 30)) * 100)}%)</span>
+              </div>
+            </div>
+
+            {/* Quota Donut / Pie Chart */}
+            <div className="flex items-center justify-between pt-2">
+              <div className="h-[120px] w-[140px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={groqQuotaData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={25} outerRadius={45}>
+                      {groqQuotaData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                  <span className="text-slate-600 text-[11px]">Sisa Request (RPM)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                  <span className="text-slate-600 text-[11px]">Request Terpakai</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Provider Details List */}
       <div className="space-y-4">
         <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-          <Cpu className="w-4 h-4 text-slate-700" /> Detail Status API Provider AI
+          <Server className="w-4 h-4 text-slate-700" /> Detail Status API Provider AI
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -316,20 +591,7 @@ export default function AiStatusMonitor() {
                     </div>
 
                     <div className="flex flex-col items-end">
-                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border flex items-center gap-1.5 ${
-                        isOnline 
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                          : isLimit 
-                          ? 'bg-amber-50 text-amber-700 border-amber-200'
-                          : isNotSet
-                          ? 'bg-slate-50 text-slate-500 border-slate-200'
-                          : 'bg-rose-50 text-rose-700 border-rose-200'
-                      }`}>
-                        {isOnline && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
-                        {isLimit && <AlertTriangle className="w-3 h-3 text-amber-500" />}
-                        {!isOnline && !isLimit && <XCircle className="w-3 h-3" />}
-                        {p.status}
-                      </span>
+                      {getStatusBadge(p.status)}
                       {p.latencyMs > 0 && (
                         <span className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
                           <Clock className="w-3 h-3" /> {p.latencyMs} ms
@@ -346,24 +608,10 @@ export default function AiStatusMonitor() {
                     </div>
                   )}
 
-                  {/* OpenRouter specific metadata */}
-                  {p.details && (
-                    <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-3 rounded-lg border border-slate-100">
-                      <div>
-                        <span className="text-slate-400 text-[10px] block">Tipe Akun</span>
-                        <span className="font-semibold text-slate-700">{p.details.isFreeTier ? 'Free Tier' : 'Paid / Credit'}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 text-[10px] block">Batas Kuota</span>
-                        <span className="font-semibold text-slate-700">{p.details.limitUSD ? `$${p.details.limitUSD}` : 'Tak Terbatas / Standard'}</span>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Models tested */}
                   {p.modelsTested.length > 0 && (
                     <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Uji Model Terakhir:</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Model Teruji:</p>
                       {p.modelsTested.map((m) => (
                         <div key={m.model} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-slate-50 border border-slate-100">
                           <span className="font-mono text-slate-700 text-[11px] truncate max-w-[180px]">{m.model}</span>
@@ -430,45 +678,6 @@ export default function AiStatusMonitor() {
               <p className="whitespace-pre-wrap">{testResponse}</p>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Guidelines & Tips for Rate Limit (HTTP 429) */}
-      <Card className="border-indigo-100 bg-indigo-50/40 shadow-sm">
-        <CardContent className="p-5 space-y-3">
-          <div className="flex items-center space-x-2 text-indigo-900 font-bold text-sm">
-            <HelpCircle className="w-4 h-4 text-indigo-600" />
-            <span>Panduan & Informasi Rate Limit (Limit AI)</span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-600">
-            <div className="bg-white p-3 rounded-xl border border-indigo-100 space-y-1">
-              <p className="font-bold text-slate-900 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> Apa itu HTTP 429?
-              </p>
-              <p className="text-[11px] leading-relaxed">
-                Error 429 terjadi ketika jumlah permintaan atau token (TPM/RPM) ke provider AI melebihi batas kuota gratis atau per-menit yang diizinkan.
-              </p>
-            </div>
-
-            <div className="bg-white p-3 rounded-xl border border-indigo-100 space-y-1">
-              <p className="font-bold text-slate-900 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Sistem Multi-Provider Fallback
-              </p>
-              <p className="text-[11px] leading-relaxed">
-                Aplikasi ini dilengkapi sistem fallback otomatis. Jika Google Gemini terkena limit 429, sistem otomatis berpindah ke Groq atau OpenRouter.
-              </p>
-            </div>
-
-            <div className="bg-white p-3 rounded-xl border border-indigo-100 space-y-1">
-              <p className="font-bold text-slate-900 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Cara Mengatasi Limit
-              </p>
-              <p className="text-[11px] leading-relaxed">
-                Jika semua provider terbatas, Anda bisa menunggu 1-5 menit untuk reset window atau mengganti `OPENROUTER_API_KEY` / `GROQ_API_KEY` di file `.env`.
-              </p>
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>

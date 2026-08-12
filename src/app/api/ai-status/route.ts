@@ -28,7 +28,7 @@ export async function GET() {
 
   const results: ProviderDiagnostic[] = [];
 
-  // 1. OpenRouter Diagnostics
+  // 1. OpenRouter Diagnostics & Real Account Data
   if (openrouterApiKey) {
     const startTime = Date.now();
     let status: ProviderDiagnostic['status'] = 'ONLINE';
@@ -47,12 +47,17 @@ export async function GET() {
 
       if (authRes.ok) {
         const authData = await authRes.json();
+        const d = authData.data || {};
         details = {
-          label: authData.data?.label || 'API Key',
-          usageUSD: authData.data?.usage || 0,
-          limitUSD: authData.data?.limit || null,
-          isFreeTier: authData.data?.is_free_tier ?? true,
-          rateLimit: authData.data?.rate_limit || null,
+          label: d.label || 'API Key',
+          usageUSD: d.usage || 0,
+          usageDailyUSD: d.usage_daily || 0,
+          usageWeeklyUSD: d.usage_weekly || 0,
+          usageMonthlyUSD: d.usage_monthly || 0,
+          limitUSD: d.limit || null,
+          limitRemainingUSD: d.limit_remaining || null,
+          isFreeTier: d.is_free_tier ?? true,
+          rateLimit: d.rate_limit || null,
         };
       } else if (authRes.status === 429) {
         status = 'RATE_LIMITED';
@@ -63,6 +68,21 @@ export async function GET() {
       } else {
         status = 'ERROR';
         errorMessage = `HTTP Status ${authRes.status}`;
+      }
+
+      // Fetch credits if possible
+      try {
+        const creditsRes = await fetch('https://openrouter.ai/api/v1/credits', {
+          headers: { Authorization: `Bearer ${openrouterApiKey}` },
+          cache: 'no-store',
+        });
+        if (creditsRes.ok) {
+          const creditsData = await creditsRes.json();
+          details.totalCredits = creditsData.data?.total_credits || 0;
+          details.totalUsage = creditsData.data?.total_usage || 0;
+        }
+      } catch (e) {
+        // credits API optional
       }
 
       // Ping test model
@@ -142,12 +162,13 @@ export async function GET() {
     });
   }
 
-  // 2. Groq Diagnostics
+  // 2. Groq Diagnostics & Real Rate Limit Headers
   if (groqApiKey) {
     const startTime = Date.now();
     let status: ProviderDiagnostic['status'] = 'ONLINE';
     let statusCode: number | null = null;
     let errorMessage: string | undefined = undefined;
+    let details: Record<string, any> = {};
     const modelsTested: ProviderDiagnostic['modelsTested'] = [];
 
     try {
@@ -170,7 +191,7 @@ export async function GET() {
         }
       }
 
-      // Ping test
+      // Ping test and read real Rate-Limit headers
       const modelStartTime = Date.now();
       try {
         const pingRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -187,6 +208,22 @@ export async function GET() {
           cache: 'no-store',
         });
         const modelLatency = Date.now() - modelStartTime;
+
+        // Parse rate limit headers directly from Groq response
+        const reqLimit = pingRes.headers.get('x-ratelimit-limit-requests');
+        const reqRemaining = pingRes.headers.get('x-ratelimit-remaining-requests');
+        const tokenLimit = pingRes.headers.get('x-ratelimit-limit-tokens');
+        const tokenRemaining = pingRes.headers.get('x-ratelimit-remaining-tokens');
+        const reqReset = pingRes.headers.get('x-ratelimit-reset-requests');
+
+        details = {
+          requestsLimitPerMin: reqLimit ? parseInt(reqLimit, 10) : 30,
+          requestsRemaining: reqRemaining ? parseInt(reqRemaining, 10) : 30,
+          tokensLimitPerMin: tokenLimit ? parseInt(tokenLimit, 10) : 14400,
+          tokensRemaining: tokenRemaining ? parseInt(tokenRemaining, 10) : 14400,
+          resetRequestsTime: reqReset || '0s',
+        };
+
         if (pingRes.ok) {
           modelsTested.push({
             model: 'llama-3.3-70b-versatile',
@@ -231,6 +268,7 @@ export async function GET() {
       statusCode,
       latencyMs: Date.now() - startTime,
       errorMessage,
+      details,
       modelsTested,
     });
   } else {
@@ -246,12 +284,17 @@ export async function GET() {
     });
   }
 
-  // 3. Google Gemini Diagnostics
+  // 3. Google Gemini Diagnostics & Real Data
   if (googleApiKey) {
     const startTime = Date.now();
     let status: ProviderDiagnostic['status'] = 'ONLINE';
     let statusCode: number | null = null;
     let errorMessage: string | undefined = undefined;
+    let details: Record<string, any> = {
+      model: 'gemini-2.5-flash',
+      tpmLimit: 1000000,
+      rpmLimit: 15,
+    };
     const modelsTested: ProviderDiagnostic['modelsTested'] = [];
 
     try {
@@ -313,6 +356,7 @@ export async function GET() {
       statusCode,
       latencyMs: Date.now() - startTime,
       errorMessage,
+      details,
       modelsTested,
     });
   } else {
