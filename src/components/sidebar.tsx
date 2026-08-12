@@ -15,7 +15,8 @@ import {
   Landmark,
   Sparkles,
   Bot,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Activity
 } from 'lucide-react';
 import { Button } from './ui/button';
 
@@ -29,6 +30,7 @@ const navItems = [
   { name: 'Laporan', href: '/laporan', icon: BarChart3 },
   { name: 'Simulator Roadmap', href: '/simulator', icon: Sparkles },
   { name: 'AI Advisor', href: '/ai-advisor', icon: Bot },
+  { name: 'Status & Limit AI', href: '/ai-status', icon: Activity },
 ];
 
 export default function Sidebar() {
