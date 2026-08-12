@@ -62,13 +62,38 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: SSH and Deploy to VPS
+      - name: SSH and Deploy to VPS (Attempt 1)
+        id: deploy1
+        uses: appleboy/ssh-action@v1.0.3
+        continue-on-error: true
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.PORT || '22' }}
+          timeout: 60s
+          command_timeout: 15m
+          script: |
+            cd ~/keuangan
+            git pull origin main
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+            docker system prune -f
+
+      - name: Wait 10s before retry (if SSH reset)
+        if: steps.deploy1.outcome != 'success'
+        run: sleep 10
+
+      - name: SSH and Deploy to VPS (Attempt 2 - Retry)
+        if: steps.deploy1.outcome != 'success'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.PORT || '22' }}
+          timeout: 60s
+          command_timeout: 15m
           script: |
             cd ~/keuangan
             git pull origin main
