@@ -635,7 +635,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     }
     // ========== END TWO-PASS VISION ==========
 
-    const systemInstructions = systemPrompt + '\n\n' + 
+    let systemInstructions = systemPrompt + '\n\n' + 
       '## FITUR PEMINDAI STRUK BELANJA (OCR STRUK)\n' +
       '- Jika pengguna mengunggah gambar/struk belanja:\n' +
       '  1. Evaluasi gambar tersebut. Jika gambar tersebut **bukan struk belanja/nota pengeluaran**, atau **sangat buram/tidak terbaca sama sekali**, kamu **DILARANG** memanggil tool apa pun dan wajib merespons langsung via teks dengan sopan, misalnya: "Saya melihat gambar yang Anda unggah, tetapi saya tidak dapat mendeteksi atau membacanya sebagai struk belanja yang valid. Mohon pastikan foto struk terlihat jelas dan beresolusi baik."\n' +
@@ -1461,6 +1461,19 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     }
 
     console.log(`[AI Router] Mode: ${selectedMode} | Model Target: ${primaryModel}`);
+
+    const modelIdentityText = primaryModel.includes('llama')
+      ? 'Groq Llama (Meta AI)'
+      : primaryModel.includes('gemini')
+      ? 'Google Gemini 2.5 Flash'
+      : primaryModel.includes('deepseek')
+      ? 'DeepSeek R1 (OpenRouter)'
+      : 'OpenRouter GPT-OSS';
+
+    systemInstructions = systemInstructions.replace(
+      '# IDENTITAS\nKamu adalah **Opin**, AI Financial Advisor pribadi yang cerdas, suportif, dan jujur.',
+      `# IDENTITAS\nKamu adalah **Opin**, AI Financial Advisor pribadi yang cerdas, suportif, dan jujur.\nEngine AI yang sedang kamu gunakan saat ini: **${primaryModel}** (${modelIdentityText}).\nJIKA pengguna bertanya "kamu model apa", "menggunakan model apa", atau sejenisnya, WAJIB jawab secara akurat bahwa kamu saat ini menggunakan engine **${modelIdentityText}** (${primaryModel}).`
+    );
 
     // Forward to n8n Webhook if configured (with non-blocking 300ms timeout)
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
