@@ -615,6 +615,7 @@ const MemoizedMessageBubble = React.memo(({
   message, 
   prevUserContent,
   isStreaming,
+  isConsecutiveWithPrevious,
   categories,
   onSaveTransaction,
   onDeleteTransaction,
@@ -625,6 +626,7 @@ const MemoizedMessageBubble = React.memo(({
   message: Message; 
   prevUserContent?: string;
   isStreaming?: boolean;
+  isConsecutiveWithPrevious?: boolean;
   categories: any[];
   onSaveTransaction: (toolCallId: string, draftData: any, imageHash: string) => Promise<boolean>;
   onDeleteTransaction: (txId: string) => Promise<boolean>;
@@ -709,14 +711,18 @@ const MemoizedMessageBubble = React.memo(({
   }
 
   return (
-    <div className={`flex gap-2.5 sm:gap-4 group ${isUser ? 'flex-row-reverse' : ''}`}>
+    <div className={`flex gap-2.5 sm:gap-4 group ${isUser ? 'flex-row-reverse' : ''} ${isConsecutiveWithPrevious && !isUser ? '-mt-3' : ''}`}>
       {/* Avatar with status indicator */}
       <div className="relative shrink-0 mt-1">
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-2xs ${
-          isUser ? 'bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 text-white font-extrabold text-xs uppercase' : 'bg-[#f0f4f9] border border-slate-200/80'
-        }`}>
-          {isUser ? 'U' : <GeminiSparkleIcon className="w-4.5 h-4.5" />}
-        </div>
+        {isConsecutiveWithPrevious && !isUser ? (
+          <div className="w-8 h-8" />
+        ) : (
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-2xs ${
+            isUser ? 'bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 text-white font-extrabold text-xs uppercase' : 'bg-[#f0f4f9] border border-slate-200/80'
+          }`}>
+            {isUser ? 'U' : <GeminiSparkleIcon className="w-4.5 h-4.5" />}
+          </div>
+        )}
       </div>
 
       {/* Bubble Container */}
@@ -951,9 +957,12 @@ const MemoizedMessageBubble = React.memo(({
           </div>
         )}
 
-        <span className={`text-[10px] text-[#76777d] mt-1 block font-medium ${isUser ? 'mr-1 text-right' : 'ml-1'}`}>
-          {timeLabel}
-        </span>
+        {/* Timestamp fallback for standalone tool invocation without text content */}
+        {!isUser && !hasVisibleContent && toolInvocations.length > 0 && (
+          <span className="text-[10px] text-slate-400 font-medium mt-1 ml-1 select-none">
+            {timeLabel}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -961,6 +970,7 @@ const MemoizedMessageBubble = React.memo(({
   prevProps.message.content === nextProps.message.content && 
   prevProps.message.role === nextProps.message.role && 
   prevProps.isStreaming === nextProps.isStreaming &&
+  prevProps.isConsecutiveWithPrevious === nextProps.isConsecutiveWithPrevious &&
   prevProps.message.experimental_attachments?.length === nextProps.message.experimental_attachments?.length &&
   JSON.stringify(prevProps.message.toolInvocations || []) === JSON.stringify(nextProps.message.toolInvocations || [])
 );
@@ -1822,29 +1832,31 @@ export default function AiChatInterface() {
                   {messages.map((message: Message, idx: number) => {
                     const prevMsg = idx > 0 ? messages[idx - 1] : null;
                     const prevUserContent = message.role === 'assistant' && prevMsg?.role === 'user' ? prevMsg.content : '';
+                    const isConsecutiveWithPrevious = idx > 0 && messages[idx - 1].role === message.role;
                     return (
                       <MemoizedMessageBubble 
                         key={message.id} 
                         message={message} 
                         prevUserContent={prevUserContent}
                         isStreaming={isLoading && idx === messages.length - 1 && message.role === 'assistant'}
-                      categories={categories}
-                      onSaveTransaction={handleSaveReceiptTransaction}
-                      onDeleteTransaction={handleDeleteTransaction}
-                      onUpdateTransaction={handleUpdateTransaction}
-                      onWebSearchPrompt={(queryText) => {
-                        append({
-                          role: 'user',
-                          content: queryText
-                        });
-                      }}
-                      showToast={(msg) => {
-                        setToastText(msg);
-                        if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-                        toastTimeoutRef.current = setTimeout(() => setToastText(null), 3000);
-                      }}
-                    />
-                  );
+                        isConsecutiveWithPrevious={isConsecutiveWithPrevious}
+                        categories={categories}
+                        onSaveTransaction={handleSaveReceiptTransaction}
+                        onDeleteTransaction={handleDeleteTransaction}
+                        onUpdateTransaction={handleUpdateTransaction}
+                        onWebSearchPrompt={(queryText) => {
+                          append({
+                            role: 'user',
+                            content: queryText
+                          });
+                        }}
+                        showToast={(msg) => {
+                          setToastText(msg);
+                          if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+                          toastTimeoutRef.current = setTimeout(() => setToastText(null), 3000);
+                        }}
+                      />
+                    );
                 })}
                   
                   {isLoading && messages[messages.length - 1]?.role === 'user' && (
