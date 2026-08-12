@@ -1560,6 +1560,14 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     if (!hasAttachments && !isMultimodal) {
       delete effectiveTools.extract_receipt_data;
     }
+    // Model Groq Llama 8B tidak mendukung tool calling dengan baik (output <function> XML)
+    // Nonaktifkan web_search untuk model kecil agar tidak menghasilkan raw function text
+    const modelsSupportingTools = ['gemini', 'llama-3.3-70b', 'deepseek', 'openai', 'gpt'];
+    const supportsWebSearch = modelsSupportingTools.some(m => primaryModel.includes(m));
+    if (!supportsWebSearch) {
+      delete effectiveTools.web_search;
+      console.log(`[AI Router] web_search disabled for ${primaryModel} (no reliable tool calling support)`);
+    }
 
     const toolChoiceSetting: any = (hasAttachments || isMultimodal) && effectiveTools.extract_receipt_data
       ? { type: 'tool', toolName: 'extract_receipt_data' }

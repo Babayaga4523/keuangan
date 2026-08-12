@@ -685,7 +685,20 @@ const MemoizedMessageBubble = React.memo(({
   const timeLabel = `${authorName} • ${formattedTime}`;
   const toolInvocations = (message as any).toolInvocations || [];
   
-  const hasVisibleContent = message.content && message.content.trim().length > 0;
+  // Bersihkan output <function>...</function> mentah dari model Groq/Llama
+  // yang kadang mengeluarkan tool call sebagai XML text bukan structured tool call
+  const cleanedContent = (message.content || '')
+    .replace(/<function\/[\w_]+[^>]*>[\s\S]*?<\/function>/gi, '')
+    .replace(/<function\/[\w_]+[\s\S]*?>/gi, '')
+    .replace(/<function>[\s\S]*?<\/function>/gi, '')
+    .replace(/\{\s*"query"\s*:\s*"[^"]*"\s*\}/g, (match) => {
+      // Jika seluruh konten hanya berisi JSON tool args, hapus
+      const stripped = (message.content || '').replace(/<[^>]+>/g, '').trim();
+      return stripped === match.trim() ? '' : match;
+    })
+    .trim();
+
+  const hasVisibleContent = cleanedContent.length > 0;
   const hasVisibleTools = toolInvocations.some((t: any) => 
     ['extract_receipt_data', 'add_transaction', 'prepare_delete_transaction', 'prepare_update_transaction', 'web_search'].includes(t.toolName)
   );
@@ -771,7 +784,7 @@ const MemoizedMessageBubble = React.memo(({
                   td: ({node, ...props}) => <td className="p-2.5 text-xs border-b border-slate-100 last:border-0 text-slate-750" {...props} />,
                 }}
               >
-                {preprocessMath(message.content as string)}
+                {preprocessMath(cleanedContent)}
               </ReactMarkdown>
             </div>
           )}
