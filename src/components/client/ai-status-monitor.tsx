@@ -48,14 +48,17 @@ export interface ModelQuotaStatus {
   status: 'OK' | 'RATE_LIMITED' | 'UNAUTHORIZED' | 'ERROR';
   statusCode: number | null;
   latencyMs: number;
-  remainingQuota: number;
-  totalQuota: number;
+  remainingQuota: number; // -1 = no header data available
+  totalQuota: number;    // -1 = no header data available
   quotaUnit: string;
   usagePercent: number; // 0 - 100%
   recoverySeconds: number;
   recoveryTimeFormatted: string;
   estimatedReadyAt: string | null;
   errorMsg?: string;
+  tokenLimit?: number;
+  tokenRemaining?: number;
+  tokenResetSeconds?: number;
 }
 
 interface DiagnosticData {
@@ -249,22 +252,22 @@ export default function AiStatusMonitor() {
   const openrouterProvider = data?.providers.find((p) => p.provider === 'openrouter');
   const openrouterDetails = openrouterProvider?.details || {};
 
+  // OpenRouter: usageUSD is total lifetime usage from /auth/key
   const openrouterUsageData = [
-    { name: 'Hari Ini', usage: openrouterDetails.usageDailyUSD || 0 },
-    { name: 'Minggu Ini', usage: openrouterDetails.usageWeeklyUSD || 0 },
-    { name: 'Bulan Ini', usage: openrouterDetails.usageMonthlyUSD || 0 },
+    { name: 'Total Usage', usage: Number(openrouterDetails.usageUSD || 0) },
+    { name: 'Sisa Credit', usage: Number(openrouterDetails.limitRemainingUSD || 0) },
   ];
 
-  // Groq Details
+  // Groq Details — real RPD (requests/day) + TPM (tokens/min) from headers
   const groqProvider = data?.providers.find((p) => p.provider === 'groq');
   const groqDetails = groqProvider?.details || {};
-  const groqReqRemaining = groqDetails.requestsRemaining || 30;
-  const groqReqLimit = groqDetails.requestsLimitPerMin || 30;
+  const groqReqRemaining = groqDetails.requestsRemaining || 0;
+  const groqReqLimit = groqDetails.requestsLimitPerDay || 0;
   const groqReqUsed = Math.max(0, groqReqLimit - groqReqRemaining);
 
   const groqQuotaData = [
-    { name: 'Sisa Request (RPM)', value: groqReqRemaining, fill: '#10b981' },
-    { name: 'Terpakai (RPM)', value: groqReqUsed, fill: '#f59e0b' },
+    { name: 'Sisa Request (RPD)', value: groqReqRemaining, fill: '#10b981' },
+    { name: 'Terpakai (RPD)', value: groqReqUsed, fill: '#f59e0b' },
   ];
 
   const getStatusBadge = (status: string) => {
@@ -408,19 +411,38 @@ export default function AiStatusMonitor() {
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-xs font-semibold">
                       <span className="text-slate-500">Sisa Kuota:</span>
-                      <span className={percent > 50 ? 'text-emerald-600 font-bold' : percent > 15 ? 'text-amber-600 font-bold' : 'text-rose-600 font-bold'}>
-                        {m.remainingQuota} / {m.totalQuota} {m.quotaUnit}
-                      </span>
+                      {m.totalQuota === -1 ? (
+                        <span className="text-slate-400 font-mono text-[10px] bg-slate-100 px-2 py-0.5 rounded">
+                          {m.status === 'OK' ? '✅ Tersedia' : m.quotaUnit}
+                        </span>
+                      ) : (
+                        <span className={percent > 50 ? 'text-emerald-600 font-bold' : percent > 15 ? 'text-amber-600 font-bold' : 'text-rose-600 font-bold'}>
+                          {m.remainingQuota} / {m.totalQuota} {m.quotaUnit}
+                        </span>
+                      )}
                     </div>
 
-                    <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                      <div 
-                        className={`h-2.5 rounded-full transition-all duration-500 ${
-                          percent > 50 ? 'bg-emerald-500' : percent > 15 ? 'bg-amber-500' : 'bg-rose-500'
-                        }`}
-                        style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
-                      />
-                    </div>
+                    {m.totalQuota !== -1 && (
+                      <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                        <div 
+                          className={`h-2.5 rounded-full transition-all duration-500 ${
+                            percent > 50 ? 'bg-emerald-500' : percent > 15 ? 'bg-amber-500' : 'bg-rose-500'
+                          }`}
+                          style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+                        />
+                      </div>
+                    )}
+                    {m.totalQuota === -1 && (
+                      <p className="text-[10px] text-slate-400 italic">Google Gemini tidak mengekspos header x-ratelimit. Status dipantau via respons HTTP langsung.</p>
+                    )}
+
+                    {/* Token quota row for Groq models */}
+                    {m.tokenLimit && m.tokenLimit > 0 && (
+                      <div className="flex justify-between text-[10px] font-semibold text-slate-500 pt-1">
+                        <span>Token Tersisa (TPM):</span>
+                        <span className="font-mono text-slate-700">{m.tokenRemaining?.toLocaleString()} / {m.tokenLimit?.toLocaleString()}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Latensi & Error Msg */}
@@ -606,33 +628,36 @@ export default function AiStatusMonitor() {
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                 <span className="text-[10px] text-slate-400 block font-semibold">Tipe Akun API</span>
-                <span className="font-bold text-slate-800 text-sm">{openrouterDetails.isFreeTier ? 'Free Tier Key' : 'Paid Key'}</span>
+                <span className="font-bold text-slate-800 text-sm">{openrouterDetails.isFreeTier ? '🆓 Free Tier' : '💳 Paid Key'}</span>
               </div>
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-[10px] text-slate-400 block font-semibold">Total Biaya (USD)</span>
-                <span className="font-bold text-slate-800 text-sm">${openrouterDetails.usageUSD || '0.0000'}</span>
+                <span className="text-[10px] text-slate-400 block font-semibold">Total Usage (USD)</span>
+                <span className="font-bold text-slate-800 text-sm">${Number(openrouterDetails.usageUSD || 0).toFixed(6)}</span>
               </div>
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-[10px] text-slate-400 block font-semibold">Penggunaan Hari Ini</span>
-                <span className="font-bold text-slate-800 text-sm">${openrouterDetails.usageDailyUSD || '0.0000'}</span>
+                <span className="text-[10px] text-slate-400 block font-semibold">Credit Limit (USD)</span>
+                <span className="font-bold text-slate-800 text-sm">{openrouterDetails.limitUSD != null ? `$${openrouterDetails.limitUSD}` : 'Unlimited'}</span>
               </div>
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-[10px] text-slate-400 block font-semibold">Penggunaan Bulan Ini</span>
-                <span className="font-bold text-slate-800 text-sm">${openrouterDetails.usageMonthlyUSD || '0.0000'}</span>
+                <span className="text-[10px] text-slate-400 block font-semibold">Sisa Credit (USD)</span>
+                <span className="font-bold text-emerald-700 text-sm">{openrouterDetails.limitRemainingUSD != null ? `$${Number(openrouterDetails.limitRemainingUSD).toFixed(4)}` : '∞ Tidak Terbatas'}</span>
               </div>
             </div>
 
-            {/* Usage Bar Chart */}
+            {/* Real Usage vs Remaining Bar Chart */}
             <div className="space-y-1.5 pt-2">
-              <p className="text-[11px] font-bold text-slate-700">Rincian Penggunaan Pengeluaran (USD):</p>
+              <p className="text-[11px] font-bold text-slate-700">Saldo Kredit OpenRouter (Real dari /auth/key):</p>
               <div className="h-[140px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={openrouterUsageData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <Tooltip formatter={(val: any) => [`$${val}`, 'Penggunaan']} />
-                    <Bar dataKey="usage" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    <Tooltip formatter={(val: any) => [`$${Number(val).toFixed(6)}`, 'USD']} />
+                    <Bar dataKey="usage" radius={[4, 4, 0, 0]}>
+                      <Cell fill="#f59e0b" />
+                      <Cell fill="#10b981" />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -653,28 +678,36 @@ export default function AiStatusMonitor() {
           <CardContent className="p-5 pt-0 space-y-4">
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100">
-                <span className="text-[10px] text-purple-600 block font-semibold">Sisa Request / Menit (RPM)</span>
+                <span className="text-[10px] text-purple-600 block font-semibold">Sisa Request / Hari (RPD)</span>
                 <span className="font-bold text-purple-950 text-sm">
-                  {groqDetails.requestsRemaining || 30} / {groqDetails.requestsLimitPerMin || 30}
+                  {groqDetails.requestsRemaining > 0 ? groqDetails.requestsRemaining : '—'} / {groqDetails.requestsLimitPerDay > 0 ? groqDetails.requestsLimitPerDay : '—'}
                 </span>
               </div>
               <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
                 <span className="text-[10px] text-emerald-600 block font-semibold">Sisa Token / Menit (TPM)</span>
                 <span className="font-bold text-emerald-950 text-sm">
-                  {groqDetails.tokensRemaining || 14400} / {groqDetails.tokensLimitPerMin || 14400}
+                  {groqDetails.tokensRemaining > 0 ? Number(groqDetails.tokensRemaining).toLocaleString() : '—'} / {groqDetails.tokensLimitPerMin > 0 ? Number(groqDetails.tokensLimitPerMin).toLocaleString() : '—'}
                 </span>
               </div>
             </div>
 
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs space-y-1 font-mono">
               <div className="flex justify-between">
-                <span className="text-slate-500">Reset Counter Window:</span>
-                <span className="font-bold text-slate-800">{groqDetails.resetRequestsTime || '0s'}</span>
+                <span className="text-slate-500">Reset Request Window:</span>
+                <span className="font-bold text-slate-800">{groqDetails.resetRequestsTime || 'N/A'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Status Quota RPM:</span>
-                <span className="font-bold text-emerald-600">Aman ({Math.round(((groqDetails.requestsRemaining || 30) / (groqDetails.requestsLimitPerMin || 30)) * 100)}%)</span>
+                <span className="text-slate-500">Reset Token Window:</span>
+                <span className="font-bold text-slate-800">{groqDetails.resetTokensTime || 'N/A'}</span>
               </div>
+              {groqReqLimit > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Status Quota RPD:</span>
+                  <span className={`font-bold ${Math.round((groqReqRemaining / groqReqLimit) * 100) > 20 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {Math.round((groqReqRemaining / groqReqLimit) * 100)}% Sisa
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Quota Donut / Pie Chart */}

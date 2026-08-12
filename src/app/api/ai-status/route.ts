@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 
 export const revalidate = 0;
 
@@ -12,11 +12,14 @@ export interface ModelQuotaStatus {
   remainingQuota: number;
   totalQuota: number;
   quotaUnit: string;
-  usagePercent: number; // 0 - 100%
+  usagePercent: number;
   recoverySeconds: number;
   recoveryTimeFormatted: string;
   estimatedReadyAt: string | null;
   errorMsg?: string;
+  tokenLimit?: number;
+  tokenRemaining?: number;
+  tokenResetSeconds?: number;
 }
 
 export interface ProviderDiagnostic {
@@ -31,7 +34,6 @@ export interface ProviderDiagnostic {
   modelsTested: ModelQuotaStatus[];
 }
 
-// Helper to parse Groq header reset string like "1m23s" or "12.5s" to seconds
 function parseResetTimeToSeconds(resetStr: string | null): number {
   if (!resetStr) return 0;
   let totalSec = 0;
@@ -39,6 +41,10 @@ function parseResetTimeToSeconds(resetStr: string | null): number {
   const secMatch = resetStr.match(/([\d\.]+)s/);
   if (minMatch) totalSec += parseInt(minMatch[1], 10) * 60;
   if (secMatch) totalSec += Math.ceil(parseFloat(secMatch[1]));
+  if (!minMatch && !secMatch) {
+    const plain = parseFloat(resetStr);
+    if (!isNaN(plain)) totalSec = Math.ceil(plain);
+  }
   return totalSec;
 }
 
@@ -50,6 +56,18 @@ function formatRecoveryTime(seconds: number): string {
   return `${m} Menit ${s > 0 ? s + ' Detik' : ''} Lagi`;
 }
 
+function extractRateLimitHeaders(res: Response) {
+  return {
+    limitRequests: parseInt(res.headers.get('x-ratelimit-limit-requests') || '0', 10) || 0,
+    remainingRequests: parseInt(res.headers.get('x-ratelimit-remaining-requests') || '0', 10) || 0,
+    limitTokens: parseInt(res.headers.get('x-ratelimit-limit-tokens') || '0', 10) || 0,
+    remainingTokens: parseInt(res.headers.get('x-ratelimit-remaining-tokens') || '0', 10) || 0,
+    resetRequests: res.headers.get('x-ratelimit-reset-requests'),
+    resetTokens: res.headers.get('x-ratelimit-reset-tokens'),
+    retryAfter: res.headers.get('retry-after'),
+  };
+}
+
 export async function GET() {
   const openrouterApiKey = process.env.OPENROUTER_API_KEY || '';
   const groqApiKey = process.env.GROQ_API_KEY || '';
@@ -58,7 +76,7 @@ export async function GET() {
 
   const results: ProviderDiagnostic[] = [];
 
-  // 1. OpenRouter Diagnostics & Model Quotas
+  // ── 1. OPENROUTER ──────────────────────────────────────────────────
   if (openrouterApiKey) {
     const startTime = Date.now();
     let status: ProviderDiagnostic['status'] = 'ONLINE';
@@ -68,7 +86,7 @@ export async function GET() {
     const modelsTested: ModelQuotaStatus[] = [];
 
     try {
-      // Key verification
+      // Real account-level usage from /auth/key
       const authRes = await fetch('https://openrouter.ai/api/v1/auth/key', {
         headers: { Authorization: `Bearer ${openrouterApiKey}` },
         cache: 'no-store',
@@ -80,30 +98,27 @@ export async function GET() {
         const d = authData.data || {};
         details = {
           label: d.label || 'API Key',
-          usageUSD: d.usage || 0,
-          usageDailyUSD: d.usage_daily || 0,
-          usageWeeklyUSD: d.usage_weekly || 0,
-          usageMonthlyUSD: d.usage_monthly || 0,
-          limitUSD: d.limit || null,
-          limitRemainingUSD: d.limit_remaining || null,
+          usageUSD: typeof d.usage === 'number' ? d.usage : 0,
+          limitUSD: typeof d.limit === 'number' ? d.limit : null,
+          limitRemainingUSD: typeof d.limit_remaining === 'number' ? d.limit_remaining : null,
           isFreeTier: d.is_free_tier ?? true,
           rateLimit: d.rate_limit || null,
         };
       } else if (authRes.status === 429) {
         status = 'RATE_LIMITED';
-        errorMessage = 'Batas Kuota / Rate Limit OpenRouter Terlampaui (429)';
-      } else if (authRes.status === 401) {
+        errorMessage = 'OpenRouter Rate Limit Exceeded (429)';
+      } else if (authRes.status === 401 || authRes.status === 403) {
         status = 'UNAUTHORIZED';
-        errorMessage = 'API Key OpenRouter tidak valid (401)';
+        errorMessage = 'API Key OpenRouter tidak valid';
       } else {
         status = 'ERROR';
         errorMessage = `HTTP Status ${authRes.status}`;
       }
 
-      // Test Model 1: GPT-OSS 20B Free
+      // Per-model real rate limit from chat/completions headers
       const modelsToTest = [
-        { id: 'openai/gpt-oss-20b:free', name: 'OpenRouter GPT-OSS 20B (Free)', maxQuota: 20 },
-        { id: 'deepseek/deepseek-r1:free', name: 'OpenRouter DeepSeek R1 (Free)', maxQuota: 20 },
+        { id: 'openai/gpt-oss-20b:free', name: 'OpenRouter GPT-OSS 20B (Free)' },
+        { id: 'deepseek/deepseek-r1:free', name: 'OpenRouter DeepSeek R1 (Free)' },
       ];
 
       for (const mObj of modelsToTest) {
@@ -117,29 +132,32 @@ export async function GET() {
             },
             body: JSON.stringify({
               model: mObj.id,
-              messages: [{ role: 'user', content: 'ping' }],
-              max_tokens: 5,
+              messages: [{ role: 'user', content: 'hi' }],
+              max_tokens: 1,
             }),
             cache: 'no-store',
           });
           const modelLatency = Date.now() - modelStartTime;
+          const rl = extractRateLimitHeaders(pingRes);
+          const isRateLimited = pingRes.status === 429;
 
-          let recoverySec = 0;
-          let isRateLimited = pingRes.status === 429;
           let errMsg: string | undefined = undefined;
+          let recoverySec = 0;
 
           if (!pingRes.ok) {
             const errJson = await pingRes.json().catch(() => ({}));
             errMsg = errJson.error?.message || `HTTP ${pingRes.status}`;
             if (isRateLimited) {
-              recoverySec = 60; // 60s reset window for free OpenRouter
-              status = 'RATE_LIMITED';
+              recoverySec = rl.retryAfter
+                ? Math.ceil(parseFloat(rl.retryAfter))
+                : parseResetTimeToSeconds(rl.resetRequests) || 60;
             }
           }
 
+          const totalReqs = rl.limitRequests > 0 ? rl.limitRequests : (details.isFreeTier ? 20 : 200);
+          const remainingReqs = isRateLimited ? 0 : (rl.remainingRequests > 0 ? rl.remainingRequests : totalReqs);
+          const usagePercent = totalReqs > 0 ? Math.round((remainingReqs / totalReqs) * 100) : 0;
           const readyTime = recoverySec > 0 ? new Date(Date.now() + recoverySec * 1000).toISOString() : null;
-          const remaining = isRateLimited ? 0 : mObj.maxQuota;
-          const usagePercent = Math.round((remaining / mObj.maxQuota) * 100);
 
           modelsTested.push({
             model: mObj.id,
@@ -148,14 +166,16 @@ export async function GET() {
             status: pingRes.ok ? 'OK' : isRateLimited ? 'RATE_LIMITED' : 'ERROR',
             statusCode: pingRes.status,
             latencyMs: modelLatency,
-            remainingQuota: remaining,
-            totalQuota: mObj.maxQuota,
-            quotaUnit: 'RPM (Req/Min)',
+            remainingQuota: remainingReqs,
+            totalQuota: totalReqs,
+            quotaUnit: rl.limitRequests > 0 ? `RPM (${rl.limitRequests} Req/Min)` : 'RPM (Est.)',
             usagePercent,
             recoverySeconds: recoverySec,
             recoveryTimeFormatted: formatRecoveryTime(recoverySec),
             estimatedReadyAt: readyTime,
             errorMsg: errMsg,
+            tokenLimit: rl.limitTokens || undefined,
+            tokenRemaining: rl.remainingTokens || undefined,
           });
         } catch (e: any) {
           modelsTested.push({
@@ -166,8 +186,8 @@ export async function GET() {
             statusCode: 500,
             latencyMs: Date.now() - modelStartTime,
             remainingQuota: 0,
-            totalQuota: mObj.maxQuota,
-            quotaUnit: 'RPM',
+            totalQuota: 20,
+            quotaUnit: 'RPM (Est.)',
             usagePercent: 0,
             recoverySeconds: 60,
             recoveryTimeFormatted: formatRecoveryTime(60),
@@ -205,7 +225,7 @@ export async function GET() {
     });
   }
 
-  // 2. Groq Diagnostics & Model Quotas
+  // ── 2. GROQ ────────────────────────────────────────────────────────
   if (groqApiKey) {
     const startTime = Date.now();
     let status: ProviderDiagnostic['status'] = 'ONLINE';
@@ -220,23 +240,15 @@ export async function GET() {
         cache: 'no-store',
       });
       statusCode = modelsRes.status;
-
       if (!modelsRes.ok) {
-        if (modelsRes.status === 429) {
-          status = 'RATE_LIMITED';
-          errorMessage = 'Rate Limit Groq terlampaui (429)';
-        } else if (modelsRes.status === 401) {
-          status = 'UNAUTHORIZED';
-          errorMessage = 'API Key Groq tidak valid (401)';
-        } else {
-          status = 'ERROR';
-          errorMessage = `HTTP Status ${modelsRes.status}`;
-        }
+        if (modelsRes.status === 429) { status = 'RATE_LIMITED'; errorMessage = 'Rate Limit Groq terlampaui (429)'; }
+        else if (modelsRes.status === 401) { status = 'UNAUTHORIZED'; errorMessage = 'API Key Groq tidak valid (401)'; }
+        else { status = 'ERROR'; errorMessage = `HTTP Status ${modelsRes.status}`; }
       }
 
       const groqModelsToTest = [
-        { id: 'llama-3.3-70b-versatile', name: 'Groq Llama 3.3 70B Versatile', defaultQuota: 30 },
-        { id: 'llama-3.1-8b-instant', name: 'Groq Llama 3.1 8B Instant', defaultQuota: 30 },
+        { id: 'llama-3.3-70b-versatile', name: 'Groq Llama 3.3 70B Versatile' },
+        { id: 'llama-3.1-8b-instant', name: 'Groq Llama 3.1 8B Instant' },
       ];
 
       for (const mObj of groqModelsToTest) {
@@ -244,38 +256,41 @@ export async function GET() {
         try {
           const pingRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
-            headers: {
-              Authorization: `Bearer ${groqApiKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: mObj.id,
-              messages: [{ role: 'user', content: 'ping' }],
-              max_tokens: 5,
-            }),
+            headers: { Authorization: `Bearer ${groqApiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: mObj.id, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 }),
             cache: 'no-store',
           });
           const modelLatency = Date.now() - modelStartTime;
 
-          // Parse Groq rate limit headers
-          const reqLimit = parseInt(pingRes.headers.get('x-ratelimit-limit-requests') || `${mObj.defaultQuota}`, 10);
-          const reqRemaining = parseInt(pingRes.headers.get('x-ratelimit-remaining-requests') || `${mObj.defaultQuota}`, 10);
-          const reqResetHeader = pingRes.headers.get('x-ratelimit-reset-requests');
-          const recoverySec = parseResetTimeToSeconds(reqResetHeader);
+          // All 6 real Groq rate-limit headers
+          const rl = extractRateLimitHeaders(pingRes);
+          const reqLimit = rl.limitRequests;
+          const reqRemaining = rl.remainingRequests;
+          const reqResetSec = parseResetTimeToSeconds(rl.resetRequests);
+          const tokenLimit = rl.limitTokens;
+          const tokenRemaining = rl.remainingTokens;
+          const tokenResetSec = parseResetTimeToSeconds(rl.resetTokens);
 
-          let isRateLimited = pingRes.status === 429;
+          const isRateLimited = pingRes.status === 429;
           let errMsg: string | undefined = undefined;
+          let recoverySec = 0;
 
           if (!pingRes.ok) {
             const errJson = await pingRes.json().catch(() => ({}));
             errMsg = errJson.error?.message || `HTTP ${pingRes.status}`;
             if (isRateLimited) {
               status = 'RATE_LIMITED';
+              const retryAfter = pingRes.headers.get('retry-after');
+              recoverySec = retryAfter ? Math.ceil(parseFloat(retryAfter)) : reqResetSec || 60;
             }
           }
 
-          const readyTime = recoverySec > 0 ? new Date(Date.now() + recoverySec * 1000).toISOString() : null;
-          const usagePercent = Math.round((reqRemaining / reqLimit) * 100);
+          const effectiveRemaining = isRateLimited ? 0 : reqRemaining;
+          const usagePercent = reqLimit > 0
+            ? Math.round((effectiveRemaining / reqLimit) * 100)
+            : (isRateLimited ? 0 : 100);
+          const readyTime = (isRateLimited && recoverySec > 0)
+            ? new Date(Date.now() + recoverySec * 1000).toISOString() : null;
 
           modelsTested.push({
             model: mObj.id,
@@ -284,36 +299,35 @@ export async function GET() {
             status: pingRes.ok ? 'OK' : isRateLimited ? 'RATE_LIMITED' : 'ERROR',
             statusCode: pingRes.status,
             latencyMs: modelLatency,
-            remainingQuota: reqRemaining,
+            remainingQuota: effectiveRemaining,
             totalQuota: reqLimit,
-            quotaUnit: 'RPM (Req/Min)',
+            quotaUnit: reqLimit > 0 ? `RPD (${reqLimit} Req/Day)` : 'RPD',
             usagePercent: isNaN(usagePercent) ? 100 : usagePercent,
-            recoverySeconds: recoverySec,
-            recoveryTimeFormatted: formatRecoveryTime(recoverySec),
+            recoverySeconds: isRateLimited ? recoverySec : 0,
+            recoveryTimeFormatted: isRateLimited ? formatRecoveryTime(recoverySec) : formatRecoveryTime(0),
             estimatedReadyAt: readyTime,
             errorMsg: errMsg,
+            tokenLimit: tokenLimit || undefined,
+            tokenRemaining: tokenRemaining || undefined,
+            tokenResetSeconds: tokenResetSec || undefined,
           });
 
           if (mObj.id === 'llama-3.3-70b-versatile') {
             details = {
-              requestsLimitPerMin: reqLimit,
+              requestsLimitPerDay: reqLimit,
               requestsRemaining: reqRemaining,
-              resetRequestsTime: reqResetHeader || '0s',
+              resetRequestsTime: rl.resetRequests || '0s',
+              tokensLimitPerMin: tokenLimit,
+              tokensRemaining: tokenRemaining,
+              resetTokensTime: rl.resetTokens || '0s',
             };
           }
         } catch (e: any) {
           modelsTested.push({
-            model: mObj.id,
-            modelName: mObj.name,
-            provider: 'Groq AI',
-            status: 'ERROR',
-            statusCode: 500,
-            latencyMs: Date.now() - modelStartTime,
-            remainingQuota: 0,
-            totalQuota: mObj.defaultQuota,
-            quotaUnit: 'RPM',
-            usagePercent: 0,
-            recoverySeconds: 60,
+            model: mObj.id, modelName: mObj.name, provider: 'Groq AI',
+            status: 'ERROR', statusCode: 500, latencyMs: Date.now() - modelStartTime,
+            remainingQuota: 0, totalQuota: 0, quotaUnit: 'RPD',
+            usagePercent: 0, recoverySeconds: 60,
             recoveryTimeFormatted: formatRecoveryTime(60),
             estimatedReadyAt: new Date(Date.now() + 60000).toISOString(),
             errorMsg: e.message,
@@ -321,41 +335,30 @@ export async function GET() {
         }
       }
     } catch (err: any) {
-      status = 'ERROR';
-      errorMessage = err.message || 'Koneksi gagal';
+      status = 'ERROR'; errorMessage = err.message || 'Koneksi gagal';
     }
 
     results.push({
-      provider: 'groq',
-      name: 'Groq AI Cloud',
-      isConfigured: true,
-      status,
-      statusCode,
-      latencyMs: Date.now() - startTime,
-      errorMessage,
-      details,
-      modelsTested,
+      provider: 'groq', name: 'Groq AI Cloud', isConfigured: true,
+      status, statusCode, latencyMs: Date.now() - startTime,
+      errorMessage, details, modelsTested,
     });
   } else {
     results.push({
-      provider: 'groq',
-      name: 'Groq AI Cloud',
-      isConfigured: false,
-      status: 'NOT_CONFIGURED',
-      statusCode: null,
-      latencyMs: 0,
-      errorMessage: 'GROQ_API_KEY belum diset di .env',
-      modelsTested: [],
+      provider: 'groq', name: 'Groq AI Cloud', isConfigured: false,
+      status: 'NOT_CONFIGURED', statusCode: null, latencyMs: 0,
+      errorMessage: 'GROQ_API_KEY belum diset di .env', modelsTested: [],
     });
   }
 
-  // 3. Google Gemini Diagnostics & Model Quota
+  // ── 3. GOOGLE GEMINI ───────────────────────────────────────────────
   if (googleApiKey) {
     const startTime = Date.now();
     let status: ProviderDiagnostic['status'] = 'ONLINE';
     let statusCode: number | null = null;
     let errorMessage: string | undefined = undefined;
     const modelsTested: ModelQuotaStatus[] = [];
+    let geminiDetails: Record<string, any> = {};
 
     try {
       const modelStartTime = Date.now();
@@ -365,8 +368,8 @@ export async function GET() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: 'ping' }] }],
-            generationConfig: { maxOutputTokens: 5 },
+            contents: [{ parts: [{ text: 'hi' }] }],
+            generationConfig: { maxOutputTokens: 1 },
           }),
           cache: 'no-store',
         }
@@ -374,39 +377,71 @@ export async function GET() {
       statusCode = pingRes.status;
       const modelLatency = Date.now() - modelStartTime;
 
-      let isRateLimited = pingRes.status === 429;
-      let recoverySec = isRateLimited ? 60 : 0;
+      const isRateLimited = pingRes.status === 429;
+      let recoverySec = 0;
       let errMsg: string | undefined = undefined;
+      let quotaMetric = '';
 
       if (!pingRes.ok) {
         const errJson = await pingRes.json().catch(() => ({}));
         errMsg = errJson.error?.message || `HTTP ${pingRes.status}`;
+
         if (isRateLimited) {
           status = 'RATE_LIMITED';
-          errorMessage = 'Quota / Rate Limit Google Gemini Terlampaui (429)';
-        } else if (pingRes.status === 400 || pingRes.status === 403 || pingRes.status === 401) {
+          errorMessage = 'Quota Google Gemini Terlampaui (429 RESOURCE_EXHAUSTED)';
+
+          // Real retry-after header
+          const retryAfter = pingRes.headers.get('retry-after');
+          if (retryAfter) recoverySec = Math.ceil(parseFloat(retryAfter));
+
+          // Parse error body for real quota violation details
+          if (errJson.error?.details) {
+            for (const detail of errJson.error.details) {
+              if (detail.violations) {
+                for (const v of detail.violations) {
+                  quotaMetric = v.description || v.subject || '';
+                }
+              }
+              if (detail.metadata?.quota_limit_value) geminiDetails.quotaLimitValue = detail.metadata.quota_limit_value;
+              if (detail.metadata?.quota_metric) geminiDetails.quotaMetric = detail.metadata.quota_metric;
+            }
+          }
+
+          if (recoverySec <= 0) recoverySec = 60;
+        } else if ([400, 401, 403].includes(pingRes.status)) {
           status = 'UNAUTHORIZED';
           errorMessage = `Gemini Key Error: ${errMsg}`;
         } else {
           status = 'ERROR';
           errorMessage = errMsg;
         }
+      } else {
+        // Real token usage from successful response body
+        const resJson = await pingRes.json().catch(() => ({}));
+        if (resJson.usageMetadata) {
+          geminiDetails = {
+            promptTokenCount: resJson.usageMetadata.promptTokenCount || 0,
+            candidatesTokenCount: resJson.usageMetadata.candidatesTokenCount || 0,
+            totalTokenCount: resJson.usageMetadata.totalTokenCount || 0,
+          };
+        }
       }
 
-      const totalRPM = 15; // Gemini 2.5 Flash Free Tier
-      const remainingRPM = isRateLimited ? 0 : 15;
       const readyTime = recoverySec > 0 ? new Date(Date.now() + recoverySec * 1000).toISOString() : null;
 
       modelsTested.push({
         model: 'gemini-2.5-flash',
-        modelName: 'Google Gemini 2.5 Flash (Primary Multimodal)',
+        modelName: 'Google Gemini 2.5 Flash',
         provider: 'Google AI',
         status: pingRes.ok ? 'OK' : isRateLimited ? 'RATE_LIMITED' : 'ERROR',
         statusCode: pingRes.status,
         latencyMs: modelLatency,
-        remainingQuota: remainingRPM,
-        totalQuota: totalRPM,
-        quotaUnit: 'RPM (15 Req/Min)',
+        // Gemini does not expose x-ratelimit headers — -1 = no data from header
+        remainingQuota: isRateLimited ? 0 : -1,
+        totalQuota: -1,
+        quotaUnit: isRateLimited
+          ? `EXHAUSTED${quotaMetric ? ` (${quotaMetric})` : ''}`
+          : 'Tersedia (No Header Data)',
         usagePercent: isRateLimited ? 0 : 100,
         recoverySeconds: recoverySec,
         recoveryTimeFormatted: formatRecoveryTime(recoverySec),
@@ -414,34 +449,23 @@ export async function GET() {
         errorMsg: errMsg,
       });
     } catch (err: any) {
-      status = 'ERROR';
-      errorMessage = err.message || 'Koneksi gagal';
+      status = 'ERROR'; errorMessage = err.message || 'Koneksi gagal';
     }
 
     results.push({
-      provider: 'google',
-      name: 'Google Gemini AI',
-      isConfigured: true,
-      status,
-      statusCode,
-      latencyMs: Date.now() - startTime,
-      errorMessage,
-      modelsTested,
+      provider: 'google', name: 'Google Gemini AI', isConfigured: true,
+      status, statusCode, latencyMs: Date.now() - startTime,
+      errorMessage, details: geminiDetails, modelsTested,
     });
   } else {
     results.push({
-      provider: 'google',
-      name: 'Google Gemini AI',
-      isConfigured: false,
-      status: 'NOT_CONFIGURED',
-      statusCode: null,
-      latencyMs: 0,
-      errorMessage: 'GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY belum diset',
-      modelsTested: [],
+      provider: 'google', name: 'Google Gemini AI', isConfigured: false,
+      status: 'NOT_CONFIGURED', statusCode: null, latencyMs: 0,
+      errorMessage: 'GOOGLE_GENERATIVE_AI_API_KEY / GEMINI_API_KEY belum diset', modelsTested: [],
     });
   }
 
-  // 4. GitHub Models PAT Diagnostics
+  // ── 4. GITHUB MODELS PAT ───────────────────────────────────────────
   if (githubPat) {
     const startTime = Date.now();
     let status: ProviderDiagnostic['status'] = 'ONLINE';
@@ -450,60 +474,75 @@ export async function GET() {
     const modelsTested: ModelQuotaStatus[] = [];
 
     try {
-      const pingRes = await fetch('https://models.inference.ai.azure.com/models', {
-        headers: { Authorization: `Bearer ${githubPat}` },
+      const pingRes = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${githubPat}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'meta-llama/Llama-3.3-70B-Instruct',
+          messages: [{ role: 'user', content: 'hi' }],
+          max_tokens: 1,
+        }),
         cache: 'no-store',
       });
       statusCode = pingRes.status;
-      let isRateLimited = pingRes.status === 429;
-      let recoverySec = isRateLimited ? 60 : 0;
+      const modelLatency = Date.now() - startTime;
+      const rl = extractRateLimitHeaders(pingRes);
+      const isRateLimited = pingRes.status === 429;
+
+      let recoverySec = 0;
+      let errMsg: string | undefined = undefined;
 
       if (!pingRes.ok) {
         if (isRateLimited) {
-          status = 'RATE_LIMITED';
-          errorMessage = 'GitHub PAT Rate Limit Exceeded (429)';
+          status = 'RATE_LIMITED'; errorMessage = 'GitHub Models Rate Limit Exceeded (429)';
+          const retryAfter = pingRes.headers.get('retry-after');
+          recoverySec = retryAfter
+            ? Math.ceil(parseFloat(retryAfter))
+            : parseResetTimeToSeconds(rl.resetRequests) || 60;
         } else if (pingRes.status === 401) {
-          status = 'UNAUTHORIZED';
-          errorMessage = 'GitHub PAT Invalid (401)';
+          status = 'UNAUTHORIZED'; errorMessage = 'GitHub PAT Invalid (401)';
         } else {
           status = 'ERROR';
-          errorMessage = `HTTP ${pingRes.status}`;
+          const errJson = await pingRes.json().catch(() => ({}));
+          errMsg = errJson.error?.message || `HTTP ${pingRes.status}`;
+          errorMessage = errMsg;
         }
       }
 
+      const totalReqs = rl.limitRequests > 0 ? rl.limitRequests : 15;
+      const remainingReqs = isRateLimited ? 0 : (rl.remainingRequests > 0 ? rl.remainingRequests : totalReqs);
+      const usagePercent = totalReqs > 0 ? Math.round((remainingReqs / totalReqs) * 100) : 0;
+
       modelsTested.push({
-        model: 'meta-llama/llama-3.3-70b-instruct',
+        model: 'meta-llama/Llama-3.3-70B-Instruct',
         modelName: 'GitHub Models Llama 3.3 70B',
         provider: 'GitHub PAT',
         status: pingRes.ok ? 'OK' : isRateLimited ? 'RATE_LIMITED' : 'ERROR',
         statusCode: pingRes.status,
-        latencyMs: Date.now() - startTime,
-        remainingQuota: isRateLimited ? 0 : 15,
-        totalQuota: 15,
-        quotaUnit: 'RPM',
-        usagePercent: isRateLimited ? 0 : 100,
+        latencyMs: modelLatency,
+        remainingQuota: remainingReqs,
+        totalQuota: totalReqs,
+        quotaUnit: rl.limitRequests > 0 ? `RPM (${rl.limitRequests} Req/Min)` : 'RPM (Est.)',
+        usagePercent,
         recoverySeconds: recoverySec,
         recoveryTimeFormatted: formatRecoveryTime(recoverySec),
         estimatedReadyAt: recoverySec > 0 ? new Date(Date.now() + recoverySec * 1000).toISOString() : null,
+        errorMsg: errMsg,
+        tokenLimit: rl.limitTokens || undefined,
+        tokenRemaining: rl.remainingTokens || undefined,
       });
     } catch (err: any) {
-      status = 'ERROR';
-      errorMessage = err.message;
+      status = 'ERROR'; errorMessage = err.message;
     }
 
     results.push({
-      provider: 'github',
-      name: 'GitHub Models PAT',
-      isConfigured: true,
-      status,
-      statusCode,
-      latencyMs: Date.now() - startTime,
-      errorMessage,
-      modelsTested,
+      provider: 'github', name: 'GitHub Models PAT', isConfigured: true,
+      status, statusCode, latencyMs: Date.now() - startTime,
+      errorMessage, modelsTested,
     });
   }
 
-  // Compute Overall Health
+  // ── OVERALL HEALTH ─────────────────────────────────────────────────
   const configuredProviders = results.filter((r) => r.isConfigured);
   const onlineProviders = configuredProviders.filter((r) => r.status === 'ONLINE');
   const rateLimitedProviders = configuredProviders.filter((r) => r.status === 'RATE_LIMITED');
