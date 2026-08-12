@@ -671,8 +671,18 @@ const MemoizedMessageBubble = React.memo(({
     return text.replace(/\[Gambar Terlampir:.*?\]/g, '').replace(/[#*`_~]/g, '').trim().substring(0, 120);
   };
 
+  const formatMessageTimestamp = (createdAt?: Date | string | number): string => {
+    const d = createdAt ? new Date(createdAt) : new Date();
+    const validDate = isNaN(d.getTime()) ? new Date() : d;
+    const timeStr = validDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = validDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    return `${timeStr} • ${dateStr}`;
+  };
+
   const isUser = message.role === 'user';
-  const timeLabel = isUser ? 'You • Baru saja' : 'Opin AI • Baru saja';
+  const formattedTime = formatMessageTimestamp(message.createdAt);
+  const authorName = isUser ? 'You' : 'Opin AI';
+  const timeLabel = `${authorName} • ${formattedTime}`;
   const toolInvocations = (message as any).toolInvocations || [];
   
   const hasVisibleContent = message.content && message.content.trim().length > 0;
@@ -768,6 +778,13 @@ const MemoizedMessageBubble = React.memo(({
           </div>
         )}
 
+        {/* User Timestamp */}
+        {isUser && (
+          <span className="text-[10px] text-slate-400 font-medium mt-1 pr-1.5 select-none">
+            {timeLabel}
+          </span>
+        )}
+
         {/* Gemini Response Toolbar */}
         {!isUser && hasVisibleContent && !isStreaming && (
           <div className="flex items-center gap-1 mt-1.5 text-slate-400 pl-1 relative">
@@ -850,6 +867,11 @@ const MemoizedMessageBubble = React.memo(({
                 </>
               )}
             </div>
+
+            {/* Assistant Timestamp */}
+            <span className="text-[10px] text-slate-400 font-medium ml-2 border-l border-slate-200/80 pl-2 select-none">
+              {timeLabel}
+            </span>
           </div>
         )}
 
