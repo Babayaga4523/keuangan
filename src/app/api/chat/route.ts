@@ -9,7 +9,7 @@ import { getJakartaDate, getJakartaFullDateString } from '@/utils/date';
 
 
 export const runtime = 'nodejs';
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 function formatRp(val: string | number) {
   return `Rp ${parseFloat(val.toString()).toLocaleString('id-ID')}`;
@@ -691,9 +691,9 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
         execute: async ({ query }: any) => {
           try {
             console.log(`[Web Search Tool] Searching: "${query}"`);
-            const results: Array<{ source: string; title: string; snippet: string; url?: string }> = [];
+            const results: Array<{ source: string; title: string; snippet: string; url?: string; article_full_body?: string }> = [];
 
-            const fetchWithTimeout = async (url: string, options: any = {}, timeoutMs = 3500) => {
+            const fetchWithTimeout = async (url: string, options: any = {}, timeoutMs = 4000) => {
               const controller = new AbortController();
               const id = setTimeout(() => controller.abort(), timeoutMs);
               try {
@@ -706,117 +706,173 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
               }
             };
 
-            // Engine 1: Google News RSS Search (Super fast, real-time market prices & news)
-            try {
-              const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=id&gl=ID&ceid=ID:id`;
-              const res = await fetchWithTimeout(rssUrl, {}, 3000);
-              if (res.ok) {
-                const xml = await res.text();
-                const itemMatches = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
-                for (let i = 0; i < Math.min(itemMatches.length, 5); i++) {
-                  const item = itemMatches[i];
-                  const titleMatch = item.match(/<title>([\s\S]*?)<\/title>/);
-                  const pubDateMatch = item.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
-                  const linkMatch = item.match(/<link>([\s\S]*?)<\/link>/);
-                  if (titleMatch) {
-                    const cleanTitle = titleMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').replace(/<[^>]*>/g, '').trim();
-                    results.push({
-                      source: 'Berita & Berkas Publik',
-                      title: cleanTitle,
-                      snippet: pubDateMatch ? `Update: ${pubDateMatch[1]}` : cleanTitle,
-                      url: linkMatch ? linkMatch[1] : undefined
-                    });
-                  }
-                }
-              }
-            } catch (e: any) {
-              console.log('[Web Search Engine 1 Error]:', e.message);
-            }
+            // Jalankan semua engine secara paralel untuk kecepatan maksimal
+            const [gnewsResult, ddgResult, wikiResult] = await Promise.allSettled([
 
-            // Engine 2: Yahoo News Search RSS
-            try {
-              const yahooUrl = `https://news.search.yahoo.com/rss?p=${encodeURIComponent(query)}`;
-              const res = await fetchWithTimeout(yahooUrl, {}, 3000);
-              if (res.ok) {
+              // Engine 1: Google News RSS (berita real-time Indonesia)
+              (async () => {
+                const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=id&gl=ID&ceid=ID:id`;
+                const res = await fetchWithTimeout(rssUrl, {
+                  headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' }
+                }, 4000);
+                if (!res.ok) return [];
                 const xml = await res.text();
                 const itemMatches = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
-                for (let i = 0; i < Math.min(itemMatches.length, 3); i++) {
-                  const item = itemMatches[i];
-                  const titleMatch = item.match(/<title>([\s\S]*?)<\/title>/);
-                  const descMatch = item.match(/<description>([\s\S]*?)<\/description>/);
+                const engineResults: typeof results = [];
+                for (let i = 0; i < Math.min(itemMatches.length, 6); i++) {
+                  const it = itemMatches[i];
+                  const titleMatch = it.match(/<title>([\s\S]*?)<\/title>/);
+                  const pubDateMatch = it.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
+                  const descMatch = it.match(/<description>([\s\S]*?)<\/description>/);
+                  const sourceMatch = it.match(/<source[^>]*>([\s\S]*?)<\/source>/);
                   if (titleMatch) {
                     const cleanTitle = titleMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').replace(/<[^>]*>/g, '').trim();
                     const cleanDesc = descMatch ? descMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').replace(/<[^>]*>/g, '').trim() : '';
-                    results.push({
-                      source: 'Yahoo Web Search',
+                    const sourceName = sourceMatch ? sourceMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').trim() : 'Google News';
+                    engineResults.push({
+                      source: `📰 ${sourceName}`,
                       title: cleanTitle,
-                      snippet: cleanDesc || cleanTitle
+                      snippet: cleanDesc.length > 20 ? cleanDesc.substring(0, 500) : (pubDateMatch ? `Dipublikasikan: ${pubDateMatch[1]}` : cleanTitle),
                     });
                   }
                 }
-              }
-            } catch (e: any) {
-              console.log('[Web Search Engine 2 Error]:', e.message);
-            }
+                return engineResults;
+              })(),
 
-            // Engine 3: Wikipedia Indonesia Search API
-            try {
-              const wikiUrl = `https://id.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
-              const res = await fetchWithTimeout(wikiUrl, {}, 2500);
-              if (res.ok) {
+              // Engine 2: DuckDuckGo Instant Answer API (zero-click, tanpa API key)
+              (async () => {
+                const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_redirect=1&no_html=1&skip_disambig=1`;
+                const res = await fetchWithTimeout(ddgUrl, {
+                  headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 FinancialBot/1.0' }
+                }, 4000);
+                if (!res.ok) return [];
                 const json = await res.json();
-                const wikiItems = json?.query?.search || [];
-                for (let i = 0; i < Math.min(wikiItems.length, 3); i++) {
-                  const item = wikiItems[i];
-                  const cleanSnippet = item.snippet.replace(/<[^>]*>/g, '').trim();
-                  results.push({
-                    source: 'Wikipedia ID',
-                    title: item.title,
-                    snippet: cleanSnippet,
-                    url: `https://id.wikipedia.org/wiki/${encodeURIComponent(item.title)}`
+                const engineResults: typeof results = [];
+                if (json.Abstract && json.Abstract.length > 30) {
+                  engineResults.push({
+                    source: `🦆 DuckDuckGo (${json.AbstractSource || 'Web'})`,
+                    title: json.Heading || query,
+                    snippet: json.Abstract.substring(0, 700),
+                    url: json.AbstractURL || undefined
                   });
                 }
-              }
-            } catch (e: any) {
-              console.log('[Web Search Engine 3 Error]:', e.message);
-            }
-
-            // Engine 4: Deep Page Body Scraper (Membuat AI membaca isi paragraf web lengkap)
-            const resultsWithBody = await Promise.all(
-              results.slice(0, 4).map(async (item) => {
-                if (!item.url) return item;
-                try {
-                  const pageRes = await fetchWithTimeout(item.url, {
-                    headers: { 
-                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-                    }
-                  }, 2500);
-                  if (pageRes.ok) {
-                    const html = await pageRes.text();
-                    const cleanBody = html
-                      .replace(/<script[\s\S]*?<\/script>/gi, '')
-                      .replace(/<style[\s\S]*?<\/style>/gi, '')
-                      .replace(/<[^>]+>/g, ' ')
-                      .replace(/\s+/g, ' ')
-                      .trim()
-                      .substring(0, 1200);
-                    if (cleanBody && cleanBody.length > 100) {
-                      return { ...item, article_full_body: cleanBody };
+                if (json.Answer && json.Answer.length > 5) {
+                  engineResults.push({
+                    source: '🦆 DuckDuckGo Instant',
+                    title: `Jawaban: ${query}`,
+                    snippet: json.Answer.substring(0, 400),
+                  });
+                }
+                if (json.RelatedTopics) {
+                  for (let i = 0; i < Math.min(json.RelatedTopics.length, 3); i++) {
+                    const topic = json.RelatedTopics[i];
+                    if (topic.Text && topic.Text.length > 20) {
+                      engineResults.push({
+                        source: '🦆 DuckDuckGo Related',
+                        title: topic.FirstURL ? decodeURIComponent(topic.FirstURL.split('/').pop() || '').replace(/_/g, ' ') : query,
+                        snippet: topic.Text.substring(0, 400),
+                        url: topic.FirstURL || undefined
+                      });
                     }
                   }
-                } catch (e) {
-                  // Silent fallback to snippet if page scrape times out
                 }
-                return item;
-              })
-            );
+                return engineResults;
+              })(),
 
-            if (resultsWithBody.length > 0) {
-              return { success: true, query, results: resultsWithBody };
+              // Engine 3: Wikipedia Indonesia (konten ensiklopedis lengkap)
+              (async () => {
+                const wikiSearchUrl = `https://id.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*&srlimit=3`;
+                const res = await fetchWithTimeout(wikiSearchUrl, {}, 3500);
+                if (!res.ok) return [];
+                const json = await res.json();
+                const wikiItems = json?.query?.search || [];
+                if (wikiItems.length === 0) return [];
+                const engineResults: typeof results = [];
+                try {
+                  const extractUrl = `https://id.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(wikiItems[0].title)}&prop=extracts&exintro=true&explaintext=true&format=json&origin=*`;
+                  const extRes = await fetchWithTimeout(extractUrl, {}, 3000);
+                  if (extRes.ok) {
+                    const extJson = await extRes.json();
+                    const pages = extJson?.query?.pages || {};
+                    const page = Object.values(pages)[0] as any;
+                    if (page?.extract && page.extract.length > 50) {
+                      engineResults.push({
+                        source: '📖 Wikipedia Indonesia',
+                        title: page.title || wikiItems[0].title,
+                        snippet: page.extract.substring(0, 900),
+                        url: `https://id.wikipedia.org/wiki/${encodeURIComponent(wikiItems[0].title)}`
+                      });
+                    }
+                  }
+                } catch (_) {
+                  const cleanSnippet = (wikiItems[0].snippet || '').replace(/<[^>]*>/g, '').trim();
+                  engineResults.push({
+                    source: '📖 Wikipedia Indonesia',
+                    title: wikiItems[0].title,
+                    snippet: cleanSnippet,
+                    url: `https://id.wikipedia.org/wiki/${encodeURIComponent(wikiItems[0].title)}`
+                  });
+                }
+                return engineResults;
+              })()
+            ]);
+
+            // Gabungkan semua hasil
+            if (gnewsResult.status === 'fulfilled') results.push(...gnewsResult.value);
+            if (ddgResult.status === 'fulfilled') results.push(...ddgResult.value);
+            if (wikiResult.status === 'fulfilled') results.push(...wikiResult.value);
+
+            console.log(`[Web Search] Raw results: ${results.length} for "${query}"`);
+
+            // Engine 4: Jina.ai Reader - baca konten lengkap halaman web (gratis, tanpa API key)
+            const urlsToScrape = results
+              .filter(r => r.url && !r.url.includes('wikipedia.org') && !r.url.includes('duckduckgo.com'))
+              .slice(0, 2)
+              .map(r => r.url as string);
+
+            if (urlsToScrape.length > 0) {
+              const scrapeResults = await Promise.allSettled(
+                urlsToScrape.map(async (url) => {
+                  const jinaUrl = `https://r.jina.ai/${url}`;
+                  const res = await fetchWithTimeout(jinaUrl, {
+                    headers: {
+                      'Accept': 'text/plain',
+                      'X-Timeout': '7',
+                      'X-Remove-Selector': 'nav,header,footer,.ad,#ad,.advertisement,.sidebar,.cookie-notice',
+                      'X-Return-Format': 'text',
+                    }
+                  }, 9000);
+                  if (res.ok) {
+                    const text = await res.text();
+                    const cleanText = text.replace(/\n{3,}/g, '\n\n').trim();
+                    return { url, text: cleanText.substring(0, 1800) };
+                  }
+                  return null;
+                })
+              );
+              scrapeResults.forEach((result) => {
+                if (result.status === 'fulfilled' && result.value) {
+                  const { url, text } = result.value;
+                  const existingIdx = results.findIndex(r => r.url === url);
+                  if (existingIdx >= 0 && text.length > 100) {
+                    results[existingIdx].article_full_body = text;
+                  }
+                }
+              });
             }
 
-            return { success: false, query, message: 'Pencarian web tidak menemukan hasil spesifik.' };
+            if (results.length > 0) {
+              console.log(`[Web Search] ✅ Returning ${Math.min(results.length, 10)} results for: "${query}"`);
+              return {
+                success: true,
+                query,
+                results: results.slice(0, 10),
+                timestamp: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
+                total_sources: results.length
+              };
+            }
+
+            return { success: false, query, message: 'Pencarian web tidak menemukan hasil. Coba kata kunci yang lebih spesifik.' };
           } catch (err: any) {
             console.error('[Web Search Tool Error]:', err);
             return { success: false, query, error: err.message };

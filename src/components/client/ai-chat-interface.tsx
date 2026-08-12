@@ -916,10 +916,20 @@ const MemoizedMessageBubble = React.memo(({
                 const query = toolInv.args?.query || 'Mencari di web...';
                 const result = toolInv.result;
                 const isExecuting = toolInv.state === 'call' || !result;
+                const resultCount = result?.results?.length || 0;
+                const hasBody = result?.results?.some((r: any) => r.article_full_body);
+                const timestamp = result?.timestamp;
                 return (
-                  <div key={toolInv.toolCallId} className="flex items-center gap-2 px-3.5 py-2 bg-blue-50/90 border border-blue-200 text-blue-900 rounded-full text-xs font-semibold my-1.5 shadow-2xs">
-                    <Globe className={`w-3.5 h-3.5 text-blue-600 ${isExecuting ? 'animate-spin' : ''}`} />
-                    <span>{isExecuting ? `Mencari "${query}" di internet...` : `Mencari web: "${query}" (${result?.results?.length || 0} hasil ditemukan)`}</span>
+                  <div key={toolInv.toolCallId} className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold my-1.5 shadow-sm border transition-all ${isExecuting ? 'bg-blue-50/90 border-blue-200 text-blue-800' : result?.success === false ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50/90 border-emerald-200 text-emerald-800'}`}>
+                    <Globe className={`w-3.5 h-3.5 flex-shrink-0 ${isExecuting ? 'text-blue-500 animate-spin' : result?.success === false ? 'text-red-500' : 'text-emerald-600'}`} />
+                    <span>
+                      {isExecuting
+                        ? `🔍 Mencari "${query.length > 40 ? query.substring(0, 40) + '…' : query}" di internet…`
+                        : result?.success === false
+                          ? `❌ Pencarian gagal: "${query.length > 30 ? query.substring(0, 30) + '…' : query}"`
+                          : `✅ Web: "${query.length > 35 ? query.substring(0, 35) + '…' : query}" — ${resultCount} hasil${hasBody ? ' + isi artikel' : ''}${timestamp ? ` · ${timestamp}` : ''}`
+                      }
+                    </span>
                   </div>
                 );
               }
