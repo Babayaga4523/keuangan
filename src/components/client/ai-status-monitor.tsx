@@ -12,18 +12,20 @@ import {
   Clock, 
   ShieldAlert, 
   Send, 
-  Key, 
-  HelpCircle, 
-  Sparkles,
+  Database, 
+  BarChart3, 
+  TrendingUp, 
+  CreditCard,
+  Timer,
+  Check,
+  AlertCircle,
   Server,
-  Database,
-  BarChart3,
-  TrendingUp,
-  CreditCard
+  Sparkles
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import {
   ResponsiveContainer,
   BarChart,
@@ -38,6 +40,23 @@ import {
   PieChart,
   Pie
 } from 'recharts';
+
+export interface ModelQuotaStatus {
+  model: string;
+  modelName: string;
+  provider: string;
+  status: 'OK' | 'RATE_LIMITED' | 'UNAUTHORIZED' | 'ERROR';
+  statusCode: number | null;
+  latencyMs: number;
+  remainingQuota: number;
+  totalQuota: number;
+  quotaUnit: string;
+  usagePercent: number; // 0 - 100%
+  recoverySeconds: number;
+  recoveryTimeFormatted: string;
+  estimatedReadyAt: string | null;
+  errorMsg?: string;
+}
 
 interface DiagnosticData {
   timestamp: string;
@@ -54,13 +73,7 @@ interface DiagnosticData {
     latencyMs: number;
     errorMessage?: string;
     details?: Record<string, any>;
-    modelsTested: {
-      model: string;
-      status: 'OK' | 'RATE_LIMITED' | 'ERROR';
-      statusCode: number | null;
-      latencyMs: number;
-      errorMsg?: string;
-    }[];
+    modelsTested: ModelQuotaStatus[];
   }[];
 }
 
@@ -71,6 +84,46 @@ interface LatencyHistoryPoint {
   google?: number;
   github?: number;
   [key: string]: any;
+}
+
+// Subcomponent: Live Countdown Timer for Recovery
+function RecoveryCountdown({ initialSeconds, estimatedReadyAt }: { initialSeconds: number; estimatedReadyAt: string | null }) {
+  const [secondsLeft, setSecondsLeft] = useState<number>(initialSeconds);
+
+  useEffect(() => {
+    setSecondsLeft(initialSeconds);
+    if (initialSeconds <= 0) return;
+
+    const timer = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [initialSeconds, estimatedReadyAt]);
+
+  if (secondsLeft <= 0) {
+    return (
+      <span className="inline-flex items-center gap-1 font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-[11px] border border-emerald-200">
+        <Check className="w-3 h-3 text-emerald-500" /> Siap Digunakan (Ready)
+      </span>
+    );
+  }
+
+  const m = Math.floor(secondsLeft / 60);
+  const s = secondsLeft % 60;
+  const timeStr = m > 0 ? `${m}m ${s}s` : `${s}s`;
+
+  return (
+    <span className="inline-flex items-center gap-1.5 font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md text-xs border border-amber-200 animate-pulse">
+      <Timer className="w-3.5 h-3.5 text-amber-600 animate-spin" /> Pulih dalam {timeStr}
+    </span>
+  );
 }
 
 export default function AiStatusMonitor() {
@@ -119,7 +172,7 @@ export default function AiStatusMonitor() {
 
   useEffect(() => {
     fetchDiagnostics();
-    const interval = setInterval(fetchDiagnostics, 45000); // auto re-check every 45s
+    const interval = setInterval(fetchDiagnostics, 35000); // auto re-check every 35s
     return () => clearInterval(interval);
   }, []);
 
@@ -170,12 +223,20 @@ export default function AiStatusMonitor() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
         <RefreshCw className="w-8 h-8 text-slate-400 animate-spin" />
-        <p className="text-sm font-medium text-slate-500">Memeriksa status & kuota API Key AI...</p>
+        <p className="text-sm font-medium text-slate-500">Memeriksa sisa kuota model AI & waktu pemulihan...</p>
       </div>
     );
   }
 
   const overall = data?.overallHealth || 'CRITICAL';
+
+  // Aggregate all models tested across all providers
+  const allModels: ModelQuotaStatus[] = [];
+  data?.providers.forEach((p) => {
+    if (p.modelsTested && p.modelsTested.length > 0) {
+      allModels.push(...p.modelsTested);
+    }
+  });
 
   // Chart 1 Data: Latency Comparison (Bar Chart)
   const latencyChartData = (data?.providers || []).map((p) => ({
@@ -184,7 +245,7 @@ export default function AiStatusMonitor() {
     status: p.status,
   }));
 
-  // Chart 2 Data: OpenRouter Usage Details (Daily, Weekly, Monthly)
+  // OpenRouter Account Details
   const openrouterProvider = data?.providers.find((p) => p.provider === 'openrouter');
   const openrouterDetails = openrouterProvider?.details || {};
 
@@ -194,7 +255,7 @@ export default function AiStatusMonitor() {
     { name: 'Bulan Ini', usage: openrouterDetails.usageMonthlyUSD || 0 },
   ];
 
-  // Chart 3 Data: Groq Rate Limit Remaining Tokens vs Used
+  // Groq Details
   const groqProvider = data?.providers.find((p) => p.provider === 'groq');
   const groqDetails = groqProvider?.details || {};
   const groqReqRemaining = groqDetails.requestsRemaining || 30;
@@ -209,7 +270,8 @@ export default function AiStatusMonitor() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'ONLINE':
-        return <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-emerald-500" /> ONLINE</span>;
+      case 'OK':
+        return <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-emerald-500" /> ONLINE (100% READY)</span>;
       case 'RATE_LIMITED':
         return <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5"><AlertTriangle className="w-3 h-3 text-amber-500" /> RATE LIMITED (429)</span>;
       case 'UNAUTHORIZED':
@@ -231,9 +293,9 @@ export default function AiStatusMonitor() {
               <Activity className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900">Status, Grafik & Limit AI Realtime</h1>
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">Sisa Kuota Model AI & Waktu Pemulihan</h1>
               <p className="text-xs text-slate-500">
-                Data langsung dari API resmi OpenRouter, Groq, Google Gemini, dan GitHub Models.
+                Pantau kapasitas tersisa per model AI & hitung mundur waktu pemulihan (recovery countdown) secara realtime.
               </p>
             </div>
           </div>
@@ -281,8 +343,8 @@ export default function AiStatusMonitor() {
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="text-lg font-bold">
-                  {overall === 'HEALTHY' && 'Sistem AI Normal & Berjalan Lancar'}
-                  {overall === 'DEGRADED' && 'Sebagian AI Terkena Limit / Kuota Habis (Fallback Aktif)'}
+                  {overall === 'HEALTHY' && 'Sistem AI Normal & Seluruh Model Siap Digunakan'}
+                  {overall === 'DEGRADED' && 'Sebagian Model AI Terkena Rate Limit (Sedang Pemulihan/Recovery)'}
                   {overall === 'CRITICAL' && 'Semua Provider AI Mengalami Masalah / Belum Dikonfigurasi'}
                 </h2>
                 <span className="relative flex h-2.5 w-2.5">
@@ -295,8 +357,8 @@ export default function AiStatusMonitor() {
                 </span>
               </div>
               <p className="text-xs opacity-80 mt-1 leading-relaxed">
-                {overall === 'HEALTHY' && 'Seluruh API Key AI merespon dengan cepat tanpa kendala rate limit.'}
-                {overall === 'DEGRADED' && 'Sistem otomatis mengalihkan (fallback) ke provider cadangan yang masih aktif saat provider utama terkena limit 429.'}
+                {overall === 'HEALTHY' && 'Seluruh model AI dari Gemini, Groq, dan OpenRouter memiliki sisa kuota aman tanpa kendala.'}
+                {overall === 'DEGRADED' && 'Sistem otomatis mengalihkan (fallback) ke model cadangan yang masih memiliki kuota aktif.'}
                 {overall === 'CRITICAL' && 'Periksa file .env Anda dan masukkan OPENROUTER_API_KEY, GROQ_API_KEY, atau GEMINI_API_KEY.'}
               </p>
             </div>
@@ -304,7 +366,93 @@ export default function AiStatusMonitor() {
         </div>
       </div>
 
-      {/* Top Metric Cards */}
+      {/* SECTION 1: MODEL-BY-MODEL QUOTA & RECOVERY COUNTDOWN CARDS */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <Cpu className="w-4.5 h-4.5 text-indigo-600" /> Sisa Kuota Per Model & Hitung Mundur Pemulihan (Recovery)
+          </h2>
+          <span className="text-xs text-slate-400 font-mono">{allModels.length} Model Teruji</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {allModels.map((m) => {
+            const isOk = m.status === 'OK';
+            const isRateLimit = m.status === 'RATE_LIMITED';
+            const percent = m.usagePercent;
+
+            return (
+              <Card key={m.model} className="border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between hover:border-slate-300 transition-all">
+                <CardHeader className="p-5 pb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 mb-1 inline-block">
+                        {m.provider}
+                      </span>
+                      <CardTitle className="text-sm font-bold text-slate-900 leading-snug">{m.modelName}</CardTitle>
+                      <CardDescription className="text-[11px] font-mono text-slate-400 mt-0.5 truncate max-w-[200px]">
+                        {m.model}
+                      </CardDescription>
+                    </div>
+
+                    <div className="shrink-0">
+                      <span className={`w-3 h-3 rounded-full inline-block ${
+                        isOk ? 'bg-emerald-500 shadow-sm shadow-emerald-300' : isRateLimit ? 'bg-amber-500 animate-ping' : 'bg-rose-500'
+                      }`} />
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="p-5 pt-0 space-y-4">
+                  {/* Progress Bar Kuota Tersisa */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-semibold">
+                      <span className="text-slate-500">Sisa Kuota:</span>
+                      <span className={percent > 50 ? 'text-emerald-600 font-bold' : percent > 15 ? 'text-amber-600 font-bold' : 'text-rose-600 font-bold'}>
+                        {m.remainingQuota} / {m.totalQuota} {m.quotaUnit}
+                      </span>
+                    </div>
+
+                    <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                      <div 
+                        className={`h-2.5 rounded-full transition-all duration-500 ${
+                          percent > 50 ? 'bg-emerald-500' : percent > 15 ? 'bg-amber-500' : 'bg-rose-500'
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Latensi & Error Msg */}
+                  <div className="flex items-center justify-between text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                    <span className="text-slate-500 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" /> Latensi:
+                    </span>
+                    <span className="font-mono font-bold text-slate-800">{m.latencyMs} ms</span>
+                  </div>
+
+                  {m.errorMsg && (
+                    <div className="p-2 bg-rose-50 border border-rose-100 rounded text-[11px] text-rose-700 font-mono break-all">
+                      ⚠️ {m.errorMsg}
+                    </div>
+                  )}
+
+                  {/* Status Pemulihan / Recovery Countdown */}
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400 font-medium">Status Pemulihan:</span>
+                    <RecoveryCountdown 
+                      initialSeconds={m.recoverySeconds} 
+                      estimatedReadyAt={m.estimatedReadyAt} 
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* SECTION 2: TOP METRIC SUMMARY CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
@@ -323,9 +471,9 @@ export default function AiStatusMonitor() {
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
-              <p className="text-xs font-semibold text-slate-500">Rate Limit (429) Status</p>
+              <p className="text-xs font-semibold text-slate-500">Model Rate Limited (429)</p>
               <p className={`text-2xl font-bold ${data?.rateLimitedCount ? 'text-amber-600' : 'text-emerald-600'}`}>
-                {data?.rateLimitedCount || 0} <span className="text-xs font-normal text-slate-400">Terkena Limit</span>
+                {data?.rateLimitedCount || 0} <span className="text-xs font-normal text-slate-400">Model Sedang Recovering</span>
               </p>
             </div>
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
@@ -339,7 +487,7 @@ export default function AiStatusMonitor() {
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
-              <p className="text-xs font-semibold text-slate-500">OpenRouter Real Usage</p>
+              <p className="text-xs font-semibold text-slate-500">OpenRouter Usage</p>
               <p className="text-2xl font-bold text-slate-900">
                 ${openrouterDetails.usageUSD !== undefined ? Number(openrouterDetails.usageUSD).toFixed(6) : '0.00'}
               </p>
@@ -353,7 +501,7 @@ export default function AiStatusMonitor() {
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1">
-              <p className="text-xs font-semibold text-slate-500">Latensi Terbaik</p>
+              <p className="text-xs font-semibold text-slate-500">Latensi Respon Tercepat</p>
               <p className="text-2xl font-bold text-slate-900">
                 {Math.min(...(data?.providers.filter(p => p.status === 'ONLINE').map(p => p.latencyMs) || [0]))} <span className="text-xs font-normal text-slate-400">ms</span>
               </p>
@@ -365,7 +513,7 @@ export default function AiStatusMonitor() {
         </Card>
       </div>
 
-      {/* SECTION CHARTS (Grafik Realtime AI) */}
+      {/* SECTION 3: GRAFIK INTERAKTIF RECHARTS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* CHART 1: Latensi Respon Provider AI (Bar Chart) */}
         <Card className="border-slate-200 shadow-sm">
@@ -442,7 +590,7 @@ export default function AiStatusMonitor() {
         </Card>
       </div>
 
-      {/* Real API Data Breakdown Cards */}
+      {/* SECTION 4: REAL API DATA BREAKDOWN CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* OpenRouter Real API Account Stats */}
         <Card className="border-slate-200 shadow-sm">
@@ -558,83 +706,7 @@ export default function AiStatusMonitor() {
         </Card>
       </div>
 
-      {/* Provider Details List */}
-      <div className="space-y-4">
-        <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-          <Server className="w-4 h-4 text-slate-700" /> Detail Status API Provider AI
-        </h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {data?.providers.map((p) => {
-            const isOnline = p.status === 'ONLINE';
-            const isLimit = p.status === 'RATE_LIMITED';
-            const isNotSet = p.status === 'NOT_CONFIGURED';
-
-            return (
-              <Card key={p.provider} className="border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between">
-                <CardHeader className="p-5 pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold ${
-                        isOnline ? 'bg-emerald-100 text-emerald-800' :
-                        isLimit ? 'bg-amber-100 text-amber-800' :
-                        isNotSet ? 'bg-slate-100 text-slate-500' : 'bg-rose-100 text-rose-800'
-                      }`}>
-                        {p.name.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <CardTitle className="text-sm font-bold text-slate-900">{p.name}</CardTitle>
-                        <CardDescription className="text-[11px] text-slate-500 font-mono">
-                          {p.isConfigured ? 'API Key Terpasang' : 'API Key Belum Ada'}
-                        </CardDescription>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col items-end">
-                      {getStatusBadge(p.status)}
-                      {p.latencyMs > 0 && (
-                        <span className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
-                          <Clock className="w-3 h-3" /> {p.latencyMs} ms
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="p-5 pt-0 space-y-3">
-                  {p.errorMessage && (
-                    <div className="p-2.5 bg-rose-50 border border-rose-100 rounded-lg text-xs text-rose-700 font-mono break-all">
-                      ⚠️ {p.errorMessage}
-                    </div>
-                  )}
-
-                  {/* Models tested */}
-                  {p.modelsTested.length > 0 && (
-                    <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Model Teruji:</p>
-                      {p.modelsTested.map((m) => (
-                        <div key={m.model} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-slate-50 border border-slate-100">
-                          <span className="font-mono text-slate-700 text-[11px] truncate max-w-[180px]">{m.model}</span>
-                          <div className="flex items-center space-x-2">
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                              m.status === 'OK' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                            }`}>
-                              {m.status} ({m.statusCode || 500})
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-mono">{m.latencyMs}ms</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Interactive Micro Test Console */}
+      {/* SECTION 5: INTERACTIVE MICRO TEST CONSOLE */}
       <Card className="border-slate-200 shadow-sm">
         <CardHeader className="p-5">
           <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
