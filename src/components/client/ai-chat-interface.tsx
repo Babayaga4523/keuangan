@@ -38,6 +38,20 @@ const preprocessMath = (content: string) => {
   return processed;
 };
 
+const GeminiSparkleIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 0C12 6.62742 6.62742 12 0 12C6.62742 12 12 17.3726 12 24C12 17.3726 17.3726 12 24 12C17.3726 12 12 6.62742 12 0Z" fill="url(#gemini_gradient_icon)"/>
+    <defs>
+      <linearGradient id="gemini_gradient_icon" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#4285F4"/>
+        <stop offset="0.33" stopColor="#9B51E0"/>
+        <stop offset="0.66" stopColor="#EA4335"/>
+        <stop offset="1" stopColor="#FBBC05"/>
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
 const compressImageBase64 = (base64Str: string, maxWidth = 1024, maxHeight = 1024, quality = 0.65): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
@@ -675,24 +689,21 @@ const MemoizedMessageBubble = React.memo(({
     <div className={`flex gap-2.5 sm:gap-4 group ${isUser ? 'flex-row-reverse' : ''}`}>
       {/* Avatar with status indicator */}
       <div className="relative shrink-0 mt-1">
-        <div className={`w-7.5 h-7.5 sm:w-8 h-8 rounded-full flex items-center justify-center shadow-xs ${
-          isUser ? 'bg-gradient-to-tr from-slate-200 to-[#d0e1fb] text-[#0b1c30]' : 'bg-black text-white'
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-2xs ${
+          isUser ? 'bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 text-white font-extrabold text-xs uppercase' : 'bg-[#f0f4f9] border border-slate-200/80'
         }`}>
-          {isUser ? <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
+          {isUser ? 'U' : <GeminiSparkleIcon className="w-4.5 h-4.5" />}
         </div>
-        {!isUser && (
-          <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full border border-white bg-emerald-500" />
-        )}
       </div>
 
       {/* Bubble Container */}
       <div className={`flex-1 flex flex-col min-w-0 ${isUser ? 'items-end' : 'items-start'}`}>
         {(hasVisibleContent || (isStreaming && !hasVisibleContent)) && (
           <div
-            className={`rounded-xl p-3.5 sm:p-5 text-[13px] sm:text-[14px] leading-relaxed w-full max-w-[94%] sm:max-w-[85%] min-w-0 transition-all ${
+            className={`text-[13px] sm:text-[14px] leading-relaxed w-full transition-all ${
               isUser
-                ? 'bg-black text-white rounded-tr-none hover:shadow-xs'
-                : 'bg-[#f8fafc] border border-slate-200/65 text-[#191c1e] rounded-tl-none hover:shadow-xs'
+                ? 'bg-[#f0f4f9] text-slate-800 rounded-3xl rounded-tr-md p-3.5 sm:p-4 max-w-[88%] sm:max-w-[78%] border border-slate-200/60 shadow-2xs font-medium'
+                : 'bg-transparent text-slate-800 p-1 sm:p-2 max-w-[96%] sm:max-w-[92%]'
             }`}
           >
           {isUser ? (
@@ -1588,7 +1599,7 @@ export default function AiChatInterface() {
                 onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#f0f4f9] hover:bg-[#e1e6ed] text-slate-800 text-xs font-bold transition-all border border-slate-200/60 shadow-2xs"
               >
-                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                <GeminiSparkleIcon className="w-4 h-4" />
                 <span>
                   {selectedModel === 'auto' && '🤖 Auto (Smart Fallback)'}
                   {selectedModel === 'gemini-2.5-flash' && '⚡ Gemini 2.5 Flash'}
@@ -1724,19 +1735,24 @@ export default function AiChatInterface() {
             <section ref={chatCanvasRef} onScroll={handleScroll} className="flex-1 overflow-y-auto w-full min-w-0 p-4 sm:p-8 bg-white scrollbar-hide flex flex-col justify-start">
               {showSuggestions ? (
                 /* Gemini Welcome Page */
-                <div className="flex-1 flex flex-col items-center justify-center max-w-3xl mx-auto px-4 py-8 sm:py-16 w-full my-auto">
-                  {/* Gemini Gradient Headline */}
-                  <h3 className="text-3xl sm:text-4xl font-bold tracking-tight text-center mb-2">
-                    <span className="bg-gradient-to-r from-[#4285f4] via-[#9b51e0] to-[#ea4335] bg-clip-text text-transparent capitalize">
+                <div className="flex-1 flex flex-col items-center justify-center max-w-3xl mx-auto px-4 py-8 sm:py-16 w-full my-auto animate-in fade-in duration-300">
+                  {/* Gemini Sparkle Icon Badge */}
+                  <div className="w-12 h-12 rounded-2xl bg-[#f0f4f9] border border-slate-200/80 flex items-center justify-center mb-4 shadow-2xs">
+                    <GeminiSparkleIcon className="w-7 h-7" />
+                  </div>
+
+                  {/* Gemini 4-Color Gradient Headline */}
+                  <h3 className="text-3xl sm:text-5xl font-bold tracking-tight text-center mb-3">
+                    <span className="bg-gradient-to-r from-[#4285f4] via-[#9b51e0] via-[#ea4335] to-[#fbbc05] bg-clip-text text-transparent capitalize">
                       Halo, {profileName === 'yoga' ? 'Yoga' : 'Silva'}
                     </span>
                   </h3>
-                  <p className="text-base sm:text-xl font-medium text-slate-400 text-center mb-10">
+                  <p className="text-base sm:text-2xl font-medium text-slate-400 text-center mb-12">
                     Bagaimana kondisi keuangan kamu hari ini?
                   </p>
 
-                  {/* Suggestion Grid (Gemini Style) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full">
+                  {/* Suggestion Grid (Gemini Style 2x2 Bento) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
                     {SUGGESTIONS.map((s, idx) => (
                       <div 
                         key={idx}
@@ -1744,13 +1760,13 @@ export default function AiChatInterface() {
                           setInput(s.prompt);
                           if (textareaRef.current) textareaRef.current.focus();
                         }}
-                        className="p-4 rounded-2xl bg-[#f0f4f9] hover:bg-[#e1e6ed] cursor-pointer transition-all border border-transparent hover:border-slate-300/40 shadow-2xs group active:scale-[0.98]"
+                        className="p-5 rounded-2xl bg-[#f0f4f9] hover:bg-[#e1e6ed] cursor-pointer transition-all border border-slate-200/40 hover:border-slate-300/80 shadow-2xs group flex flex-col justify-between min-h-[110px] active:scale-[0.98] hover:scale-[1.01]"
                       >
-                        <h4 className="font-bold text-xs sm:text-[13px] text-slate-800 group-hover:text-blue-600 transition-colors flex items-center gap-2">
-                          <MessageSquare className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600 transition-colors shrink-0" />
+                        <h4 className="font-bold text-xs sm:text-sm text-slate-800 group-hover:text-[#4285f4] transition-colors flex items-center gap-2">
+                          <GeminiSparkleIcon className="h-4 w-4 shrink-0" />
                           {s.title}
                         </h4>
-                        <p className="text-[11px] sm:text-xs text-slate-500 mt-2 leading-relaxed font-normal">{s.desc}</p>
+                        <p className="text-xs text-slate-500 mt-2 leading-relaxed font-normal">{s.desc}</p>
                       </div>
                     ))}
                   </div>
@@ -1990,7 +2006,7 @@ export default function AiChatInterface() {
                       <button 
                         type="submit"
                         disabled={isLoading || (!input.trim() && attachments.length === 0)}
-                        className="w-9 h-9 sm:w-10 sm:h-10 bg-slate-900 hover:bg-black text-white flex items-center justify-center rounded-full transition-all shadow-xs disabled:opacity-30 active:scale-95"
+                        className="w-9 h-9 sm:w-10 sm:h-10 bg-[#1a73e8] hover:bg-[#1557b0] text-white flex items-center justify-center rounded-full transition-all shadow-xs disabled:opacity-30 active:scale-95 shrink-0"
                       >
                         <Send className="w-4 h-4" />
                       </button>
