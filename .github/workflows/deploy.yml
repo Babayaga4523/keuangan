@@ -68,7 +68,7 @@ jobs:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.PORT }}
+          port: ${{ secrets.PORT || '22' }}
           script: |
             cd ~/keuangan
             git pull origin main
