@@ -611,7 +611,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
             .map((p: any) => p.text)
             .join('\n');
 
-          const enhancedUserText = (textParts || 'Tolong periksa dan analisis struk belanja ini.') +
+          const enhancedUserText = (textParts || 'Tolong periksa dan analisis gambar yang diunggah.') +
             '\n\n--- HASIL PEMINDAIAN GAMBAR (Vision OCR) ---\n' + visionDescription +
             '\n--- AKHIR HASIL PEMINDAIAN ---';
 
@@ -628,7 +628,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
             .join('\n');
           recentMessages[recentMessages.length - 1] = {
             role: 'user',
-            content: textParts || 'Tolong periksa dan analisis struk belanja ini. (Gambar gagal diproses)'
+            content: textParts || 'Tolong periksa dan analisis gambar yang diunggah. (Gambar gagal diproses)'
           };
         }
       }
@@ -636,13 +636,20 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     // ========== END TWO-PASS VISION ==========
 
     let systemInstructions = systemPrompt + '\n\n' + 
-      '## FITUR PEMINDAI STRUK BELANJA (OCR STRUK)\n' +
-      '- Jika pengguna mengunggah gambar/struk belanja:\n' +
-      '  1. Evaluasi gambar tersebut. Jika gambar tersebut **bukan struk belanja/nota pengeluaran**, atau **sangat buram/tidak terbaca sama sekali**, kamu **DILARANG** memanggil tool apa pun dan wajib merespons langsung via teks dengan sopan, misalnya: "Saya melihat gambar yang Anda unggah, tetapi saya tidak dapat mendeteksi atau membacanya sebagai struk belanja yang valid. Mohon pastikan foto struk terlihat jelas dan beresolusi baik."\n' +
-      '  2. Jika gambar merupakan struk belanja yang valid, kamu wajib memanggil tool `extract_receipt_data` secara otomatis untuk mengekstrak data keuangan terstruktur.\n' +
-      '  3. **Penting**: Jangan pernah memanggil tool `add_transaction` secara langsung untuk struk belanja. Proses pencatatan struk harus melalui tool `extract_receipt_data` terlebih dahulu agar pengguna dapat memverifikasi datanya lewat kartu konfirmasi di UI.\n' +
-      '  4. Gunakan format mata uang Rupiah Indonesia: nominal berupa angka bulat bulat (integer) tanpa titik/koma desimal.\n' +
-      '  5. Setelah memanggil `extract_receipt_data` dan menerima hasilnya, sampaikan penjelasan ramah bahwa draf data struk belanja telah berhasil diekstrak dan minta pengguna untuk memeriksa dan menyimpannya melalui kartu konfirmasi yang muncul di bawah obrolan.\n\n' +
+      '## ATURAN EVALUASI GAMBAR (VISION & PEMINDAI STRUK BELANJA)\n' +
+      'Ketika pengguna mengunggah gambar/foto:\n' +
+      '1. **KONSULTASI, WISHLIST & PRODUK E-COMMERCE (BUKAN STRUK)**:\n' +
+      '   - Jika gambar berupa screenshot e-commerce (Shopee, Tokopedia, Bukalapak, TikTok Shop), produk (HP, gadget, baju, kendaraan, barang impian), price tag, chart, atau gambar umum,\n' +
+      '   - DAN/ATAU pengguna bertanya/berkonsultasi (misalnya: "worth it gak?", "menurutmu gimana?", "mending beli kapan?", "kemahalan gak?", "apakah uangku cukup?"),\n' +
+      '   - KAMU WAJIB MENJAWAB VIA TEKS DENGAN SARAN & KONSULTASI KEUANGAN CERDAS!\n' +
+      '   - **DILARANG KERAS** memanggil tool `extract_receipt_data` untuk gambar konsultasi/produk/wishlist e-commerce!\n\n' +
+      '2. **PENCATATAN STRUK BELANJA RESMI**:\n' +
+      '   - Tool `extract_receipt_data` HANYA boleh dipanggil JIKA gambar adalah **struk belanja/nota transaksi resmi yang sudah selesai dibayar** (ada nama merchant/toko, daftar item belanja, total bayar, tanggal transaksi) AND pengguna bermaksud mencatat pengeluaran tersebut.\n' +
+      '   - **DILARANG** memanggil tool `extract_receipt_data` lebih dari 1 kali dalam 1 giliran pesan!\n' +
+      '   - Jangan pernah memanggil tool `add_transaction` secara langsung untuk struk belanja. Proses pencatatan struk harus melalui tool `extract_receipt_data` terlebih dahulu agar pengguna dapat memverifikasi datanya lewat kartu konfirmasi di UI.\n' +
+      '   - Setelah memanggil `extract_receipt_data` dan menerima hasilnya, sampaikan penjelasan ramah bahwa draf data struk belanja telah berhasil diekstrak dan minta pengguna untuk memeriksa dan menyimpannya melalui kartu konfirmasi yang muncul di bawah obrolan.\n\n' +
+      '3. **GAMBAR BURAM / TIDAK TERBACA**:\n' +
+      '   - Jika gambar bukan struk belanja yang valid saat user ingin mencatat, atau sangat buram/terpotong, jelaskan secara sopan lewat teks tanpa memanggil tool.\n\n' +
       '## FITUR PENCARIAN WEB (WEB SEARCH / ACCESS INTERNET)\n' +
       '- Kamu memiliki akses penuh ke internet secara real-time via tool `web_search`.\n' +
       '- Jika pengguna menanyakan info publik, skor pertandingan olahraga, berita terbaru, harga barang/gadget, promo, atau topik apa pun yang membutuhkan informasi dari internet, KAMU WAJIB MEMANGGIL `web_search` sebelum menjawab! DILARANG menolak pertanyaan jika kamu bisa mencari jawabannya via `web_search`.\n' +
@@ -1562,9 +1569,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       console.log(`[AI Router] web_search disabled for ${primaryModel} (no reliable tool calling support)`);
     }
 
-    const toolChoiceSetting: any = (hasAttachments || isMultimodal) && effectiveTools.extract_receipt_data
-      ? { type: 'tool', toolName: 'extract_receipt_data' }
-      : 'auto';
+    const toolChoiceSetting: any = 'auto';
 
     const getModelInstance = (modelName: string) => {
       if (modelName.startsWith('gemini-') && googleProvider) {

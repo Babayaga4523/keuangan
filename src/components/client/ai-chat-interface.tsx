@@ -897,17 +897,21 @@ const MemoizedMessageBubble = React.memo(({
         {/* Custom tool card below the assistant bubble */}
         {!isUser && toolInvocations.length > 0 && (
           <div className="w-full flex flex-col items-start mt-2">
-            {toolInvocations.map((toolInv: any) => {
-              if (toolInv.toolName === 'extract_receipt_data') {
-                return (
-                  <ReceiptDraftCard 
-                    key={toolInv.toolCallId}
-                    toolInvocation={toolInv} 
-                    categories={categories}
-                    onSave={onSaveTransaction}
-                  />
-                );
-              } else if (toolInv.toolName === 'add_transaction') {
+            {(() => {
+              const renderedReceipts = new Set();
+              return toolInvocations.map((toolInv: any) => {
+                if (toolInv.toolName === 'extract_receipt_data') {
+                  if (renderedReceipts.has('extract_receipt_data')) return null;
+                  renderedReceipts.add('extract_receipt_data');
+                  return (
+                    <ReceiptDraftCard 
+                      key={toolInv.toolCallId}
+                      toolInvocation={toolInv} 
+                      categories={categories}
+                      onSave={onSaveTransaction}
+                    />
+                  );
+                } else if (toolInv.toolName === 'add_transaction') {
                 return (
                   <TransactionSuccessCard 
                     key={toolInv.toolCallId}
@@ -953,7 +957,8 @@ const MemoizedMessageBubble = React.memo(({
                 );
               }
               return null;
-            })}
+            });
+          })()}
           </div>
         )}
 
