@@ -693,11 +693,10 @@ const MemoizedMessageBubble = React.memo(({
     .replace(/<function\/[\w_]+[^>]*>[\s\S]*?<\/function>/gi, '')
     .replace(/<function\/[\w_]+[\s\S]*?>/gi, '')
     .replace(/<function>[\s\S]*?<\/function>/gi, '')
-    .replace(/\{\s*"query"\s*:\s*"[^"]*"\s*\}/g, (match) => {
-      // Jika seluruh konten hanya berisi JSON tool args, hapus
-      const stripped = (message.content || '').replace(/<[^>]+>/g, '').trim();
-      return stripped === match.trim() ? '' : match;
-    })
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
+    .replace(/^[\s\n]*\{[\s\S]*?"query"\s*:[\s\S]*?\}[\s\n]*$/gi, '')
+    .replace(/^[\s\n]*\{[\s\S]*?"merchant"\s*:[\s\S]*?\}[\s\n]*$/gi, '')
+    .replace(/\{\s*"query"\s*:\s*"[^"]*"[\s\S]*?\}/gi, '')
     .trim();
 
   const hasVisibleContent = cleanedContent.length > 0;

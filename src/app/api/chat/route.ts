@@ -471,129 +471,83 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
       apiKey: groqApiKey || openrouterApiKey || '',
     });
 
-    // GitHub Models / Llama needed a two-pass pre-scan. Gemini 2.5 Flash handles multimodal images natively in 1 pass.
-    // So we only run pre-scan if googleApiKey is NOT set.
+    // Standardize image pre-scan across all models so text fallback models (e.g. Llama 70B) always get detailed image description
     const lastRecentMsg = recentMessages[recentMessages.length - 1];
     let visionDescription = '';
-    if (!googleApiKey && lastRecentMsg?.role === 'user' && Array.isArray(lastRecentMsg.content)) {
-      const imageParts = lastRecentMsg.content.filter((p: any) => p.type === 'image');
+    if (lastRecentMsg?.role === 'user' && Array.isArray(lastRecentMsg.content)) {
+      const imageParts = lastRecentMsg.content.filter((p: any) => p.type === 'image' || p.type === 'image_url');
       if (imageParts.length > 0) {
         try {
           console.time('Vision Pre-scan');
           
-          const ocrPrompt = `Kamu adalah mesin OCR struk belanja Indonesia yang sangat teliti dan akurat. Tugas kamu adalah membaca SEMUA teks pada gambar ini secara PERSIS seperti yang tertulis.
+          const ocrPrompt = `Kamu adalah sistem analisis gambar & OCR visual Indonesia yang sangat teliti.
+Tugas kamu adalah menganalisis dan membaca isi gambar ini secara lengkap.
 
-INSTRUKSI PENTING:
-1. Baca gambar ini karakter demi karakter dengan SANGAT hati-hati
-2. Perhatikan perbedaan: angka 0 vs huruf O, angka 1 vs huruf l/I, angka 8 vs huruf B
-3. Baca angka harga dari KANAN ke KIRI untuk menghindari kesalahan digit
-4. Jika ada teks yang buram, tulis [tidak terbaca] — JANGAN mengarang angka
-5. Perhatikan tanda negatif (-) di depan angka yang artinya DISKON/POTONGAN
+Dua Kemungkinan Jenis Gambar:
+1. STRUK / NOTA BELANJA: Tulis detail toko, tanggal, daftar item, subtotal, diskon, pajak, total bayar, metode pembayaran.
+2. PRODUCT PAGE / E-COMMERCE / SCREENSHOT WISHLIST / UMUM: Jika gambar berupa screenshot e-commerce (Shopee, Tokopedia, Bukalapak, TikTok), foto produk, price tag, HP, gadget, baju, dll, JELASKAN DETAIL PRODUK: Nama Barang/HP, Merk, Spesifikasi/Varian (misal: 12/256GB), Harga yang tertera (misal: Rp 11.775.000), Diskon jika ada, dan Nama Toko/Platform.
 
-DETEKSI DISKON & POTONGAN (sangat penting!):
-Cari dan baca SEMUA jenis potongan harga yang mungkin muncul di struk:
-- "DISC", "DISKON", "DISCOUNT", "DSC" → diskon umum
-- "HEMAT", "SAVING", "SAVE" → potongan harga langsung
-- "POT.HRG", "POT HARGA", "POTONGAN" → potongan harga
-- "MEMBER DISC", "MEMBER PRICE", "HRG MEMBER" → diskon member/kartu anggota
-- "PROMO", "SPECIAL PRICE", "HRG PROMO" → harga promo
-- "KUPON", "COUPON", "VOUCHER" → diskon kupon/voucher
-- "CASHBACK", "CB" → cashback
-- "BUNDLE", "BELI 2 GRATIS 1", "BUY 1 GET 1" → promo bundling
-- "PEMBULATAN", "ROUNDING" → pembulatan (biasanya potongan kecil)
-- Angka NEGATIF atau dalam tanda kurung (xxx) → potongan per-item
-- Baris dengan harga dicoret atau 2 harga berbeda → ada diskon
-
-FORMAT OUTPUT (jika ini struk/nota belanja):
-TOKO: [nama toko persis seperti tertulis]
-ALAMAT: [alamat jika ada]
-TANGGAL: [tanggal dan jam persis dari struk]
-KASIR: [nama kasir jika ada]
-NO. STRUK: [nomor struk/transaksi jika ada]
-
-DAFTAR ITEM:
-1. [nama item persis] - Qty: [jumlah] x Rp [harga satuan] = Rp [subtotal]
-   DISKON ITEM: -Rp [jumlah diskon] ([keterangan diskon, misal: "Member Price", "Promo"])
-2. [item berikutnya...]
-
-SUBTOTAL: Rp [jumlah total harga semua item sebelum diskon total]
-DISKON/POTONGAN: -Rp [total semua diskon] ([keterangan/label diskon])
-PAJAK/PPN: Rp [jumlah pajak, jika ada]
-TOTAL BAYAR: Rp [angka GRAND TOTAL / TOTAL AKHIR yang benar-benar dibayar]
-PEMBAYARAN: [tunai/debit/kredit/e-wallet/QRIS + nama bank/provider]
-KEMBALIAN: Rp [angka, jika ada]
-
-CATATAN KHUSUS: [tulis jika ada info penting lain: no. member, poin, dll]
-
-Jika gambar ini BUKAN struk/nota belanja, jelaskan apa yang kamu lihat dengan singkat.
 JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.
-DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG berikan hasil akhir saja.`;
+DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG berikan hasil akhir deskripsi gambar saja.`;
 
           const visionPromptParts: any[] = [
             { type: 'text', text: ocrPrompt },
             ...imageParts
           ];
 
-          // Vision uses Google Gemini 2.5 Flash if GOOGLE_GENERATIVE_AI_API_KEY is set,
-          // falling back to Groq qwen/qwen3.6-27b or OpenRouter gpt-oss-20b.
-          let visionProvider: any;
-          let visionModelId: string;
+          let visionResult: any;
+          
+          // Strategy 1: Try Gemini 2.5 Flash if Google key available
           if (googleApiKey && googleProvider) {
-            visionProvider = googleProvider;
-            visionModelId = 'gemini-2.5-flash';
-          } else if (groqApiKey) {
-            visionProvider = createOpenAI({
-              baseURL: 'https://api.groq.com/openai/v1',
-              apiKey: groqApiKey,
-            });
-            visionModelId = 'qwen/qwen3.6-27b';
-          } else {
-            visionProvider = createOpenAI({
-              baseURL: 'https://openrouter.ai/api/v1',
-              apiKey: openrouterApiKey || apiKey,
-            });
-            visionModelId = 'openai/gpt-oss-20b:free';
+            try {
+              visionResult = await generateText({
+                model: googleProvider('gemini-2.5-flash'),
+                messages: [{ role: 'user', content: visionPromptParts }],
+                temperature: 0.05,
+                maxTokens: 1500
+              });
+            } catch (gErr: any) {
+              console.warn('[Vision Pre-scan] Gemini failed or rate limited (429), trying Groq Vision fallback:', gErr.message);
+            }
           }
 
-          let visionResult;
-          try {
-            visionResult = await generateText({
-              model: visionProvider(visionModelId),
-              messages: [
-                {
-                  role: 'user',
-                  content: visionPromptParts
-                }
-              ],
-              temperature: 0.05,
-              maxTokens: 6000
-            });
-          } catch (visionErr: any) {
-            if (openrouterApiKey) {
-              console.warn('[Vision Pre-scan] Primary vision failed, trying OpenRouter fallback:', visionErr.message);
-              const fallbackProvider = createOpenAI({
+          // Strategy 2: Fallback to Groq Vision (llama-3.2-11b-vision-preview)
+          if (!visionResult && groqApiKey) {
+            try {
+              const groqProvider = createOpenAI({
+                baseURL: 'https://api.groq.com/openai/v1',
+                apiKey: groqApiKey,
+              });
+              visionResult = await generateText({
+                model: groqProvider('llama-3.2-11b-vision-preview'),
+                messages: [{ role: 'user', content: visionPromptParts }],
+                temperature: 0.05,
+                maxTokens: 1500
+              });
+            } catch (groqErr: any) {
+              console.warn('[Vision Pre-scan] Groq Vision failed:', groqErr.message);
+            }
+          }
+
+          // Strategy 3: Fallback to OpenRouter Vision
+          if (!visionResult && openrouterApiKey) {
+            try {
+              const openrouterProvider = createOpenAI({
                 baseURL: 'https://openrouter.ai/api/v1',
                 apiKey: openrouterApiKey,
               });
               visionResult = await generateText({
-                model: fallbackProvider('openai/gpt-oss-20b:free'),
-                messages: [
-                  {
-                    role: 'user',
-                    content: visionPromptParts
-                  }
-                ],
+                model: openrouterProvider('openai/gpt-oss-20b:free'),
+                messages: [{ role: 'user', content: visionPromptParts }],
                 temperature: 0.05,
-                maxTokens: 2000
+                maxTokens: 1500
               });
-            } else {
-              throw visionErr;
+            } catch (orErr: any) {
+              console.warn('[Vision Pre-scan] OpenRouter Vision failed:', orErr.message);
             }
           }
-          let rawVisionDescription = visionResult.text || '';
-          
-          // Qwen models output a massive <think>...</think> block.
-          // We MUST strip it out. Added (?:<\/think>|$) in case maxTokens cut the response before it finished thinking.
+
+          let rawVisionDescription = visionResult?.text || '';
           visionDescription = rawVisionDescription.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').trim();
           
           // Fallback if everything was inside think or empty
