@@ -678,17 +678,10 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     const chatTools = {
       web_search: tool({
         description: 'Mencari informasi terkini dari internet (Web Search) seperti harga gadget/barang terbaru, kurs Rupiah/Valas, harga emas, inflasi, suku bunga bank, berita pasar/keuangan, promo, atau informasi publik lainnya.',
-        parameters: jsonSchema({
-          type: 'object',
-          properties: {
-            query: { 
-              type: 'string', 
-              description: 'Kata kunci pencarian yang spesifik (contoh: "harga iPhone 15 Pro Indonesia", "kurs USD ke IDR hari ini", "suku bunga BI rate terbaru").' 
-            }
-          },
-          required: ['query']
+        parameters: z.object({
+          query: z.string().describe('Kata kunci pencarian yang spesifik (contoh: "harga iPhone 15 Pro Indonesia", "kurs USD ke IDR hari ini", "suku bunga BI rate terbaru").')
         }),
-        execute: async ({ query }: any) => {
+        execute: async ({ query }: { query: string }) => {
           try {
             console.log(`[Web Search Tool] Searching: "${query}"`);
             const results: Array<{ source: string; title: string; snippet: string; url?: string; article_full_body?: string }> = [];
