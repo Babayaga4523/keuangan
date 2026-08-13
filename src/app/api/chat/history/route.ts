@@ -76,11 +76,35 @@ export async function GET(req: Request) {
       return NextResponse.json({ messages: [] });
     }
 
-    const messages = (data || []).reverse().map(msg => ({
-      id: msg.id,
-      role: msg.role,
-      content: msg.content
-    }));
+    const messages = (data || []).reverse().map(msg => {
+      const attachments: any[] = [];
+      const matches = (msg.content || '').match(/\[Gambar Terlampir:\s*(\{[\s\S]*?\})\]/g);
+      if (matches) {
+        matches.forEach((m: string) => {
+          try {
+            const jsonStr = m.replace(/^\[Gambar Terlampir:\s*/, '').replace(/\]$/, '');
+            const parsed = JSON.parse(jsonStr);
+            if (parsed && parsed.url) {
+              attachments.push({
+                name: parsed.name || 'Gambar',
+                url: parsed.url,
+                contentType: 'image/png'
+              });
+            }
+          } catch (e) {
+            // Ignore parse errors for old non-JSON strings
+          }
+        });
+      }
+
+      return {
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        createdAt: msg.created_at,
+        experimental_attachments: attachments.length > 0 ? attachments : undefined
+      };
+    });
 
     return NextResponse.json({ messages });
   } catch (error) {

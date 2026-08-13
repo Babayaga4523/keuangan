@@ -339,8 +339,18 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
 
     if (lastUserMessage && lastUserMessage.role === 'user') {
       let contentToSave = '';
-      
-      if (Array.isArray(lastUserMessage.content)) {
+
+      if (lastUserMessage.experimental_attachments && Array.isArray(lastUserMessage.experimental_attachments) && lastUserMessage.experimental_attachments.length > 0) {
+        contentToSave = typeof lastUserMessage.content === 'string' ? lastUserMessage.content : '';
+        lastUserMessage.experimental_attachments.forEach((att: any) => {
+          const imgUrl = att.url || att.image || '';
+          if (imgUrl) {
+            contentToSave += `\n\n[Gambar Terlampir: {"url":${JSON.stringify(imgUrl)},"name":${JSON.stringify(att.name || 'Gambar')}}]`;
+          } else {
+            contentToSave += `\n\n[Gambar Terlampir: ${att.name || 'Gambar'}]`;
+          }
+        });
+      } else if (Array.isArray(lastUserMessage.content)) {
         const textParts = lastUserMessage.content.filter((part: any) => part.type === 'text');
         const imageParts = lastUserMessage.content.filter((part: any) => part.type === 'image_url' || part.type === 'image');
         
@@ -348,17 +358,16 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
         
         if (imageParts.length > 0) {
           imageParts.forEach((part: any, index: number) => {
-             contentToSave += `\n\n[Gambar Terlampir: Gambar ${index + 1}]`;
+            const imgUrl = part.url || part.image || part.image_url?.url || part.image_url || '';
+            if (imgUrl) {
+              contentToSave += `\n\n[Gambar Terlampir: {"url":${JSON.stringify(imgUrl)},"name":"Gambar ${index + 1}"}]`;
+            } else {
+              contentToSave += `\n\n[Gambar Terlampir: Gambar ${index + 1}]`;
+            }
           });
         }
       } else {
-        contentToSave = lastUserMessage.content;
-      }
-
-      if (lastUserMessage.experimental_attachments && Array.isArray(lastUserMessage.experimental_attachments)) {
-        lastUserMessage.experimental_attachments.forEach((att: any) => {
-          contentToSave += `\n\n[Gambar Terlampir: ${att.name || 'Gambar'}]`;
-        });
+        contentToSave = lastUserMessage.content || '';
       }
 
       await supabase.from('chat_messages').insert({
