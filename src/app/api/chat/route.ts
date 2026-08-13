@@ -1476,7 +1476,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       primaryModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'openai/gpt-oss-20b:free';
     } else {
       selectedMode = 'GENERAL (Chat & Web Search)';
-      primaryModel = groqApiKey ? 'llama-3.1-8b-instant' : 'openai/gpt-oss-20b:free';
+      primaryModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'openai/gpt-oss-20b:free';
     }
 
     console.log(`[AI Router] Mode: ${selectedMode} | Model Target: ${primaryModel}`);
