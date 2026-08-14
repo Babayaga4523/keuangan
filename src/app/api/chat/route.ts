@@ -653,6 +653,10 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
         }),
         execute: async ({ query }: { query: string }) => {
           try {
+            // Guard: query harus ada dan tidak kosong
+            if (!query || typeof query !== 'string' || query.trim() === '') {
+              return { success: false, query: '', message: 'Parameter "query" wajib diisi. Harap tentukan kata kunci pencarian terlebih dahulu.' };
+            }
             console.log(`[Web Search Tool] Searching: "${query}"`);
             const results: Array<{ source: string; title: string; snippet: string; url?: string; article_full_body?: string }> = [];
 
@@ -1568,9 +1572,10 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
         console.log(`[AI Router] Attempting stream with model: ${modelName}`);
 
         const currentTools = { ...effectiveTools };
-        const supportsTools = ['gemini', 'llama-3.3-70b', 'deepseek', 'openai', 'gpt'].some(m => modelName.includes(m));
+        const supportsTools = modelsSupportingTools.some(m => modelName.includes(m));
         if (!supportsTools) {
           delete currentTools.web_search;
+          console.log(`[AI Router] web_search disabled for fallback model ${modelName}`);
         }
 
         const candidateResult = await streamText({

@@ -1879,28 +1879,28 @@ export default function AiChatInterface() {
 
                   {/* Error display */}
                   {error && (
-                    <div className="flex gap-4 group">
+                    <div className="flex gap-3 group">
                       <div className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center shrink-0 mt-1 border border-red-200">
                         <svg xmlns="http://www.w3.org/2008/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                         </svg>
                       </div>
-                      <div className="flex-1">
-                        <div className="p-3.5 my-2 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-xs space-y-2 max-w-xl shadow-2xs animate-fade-in">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold flex items-center gap-1.5 text-red-800">
+                      <div className="flex-1 min-w-0">
+                        <div className="p-3.5 my-2 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-xs space-y-2.5 shadow-2xs animate-fade-in">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                            <span className="font-bold flex items-center gap-1.5 text-red-800 flex-1 min-w-0">
                               ⚠️ Terjadi Gangguan Koneksi AI
                             </span>
                             <button
                               type="button"
                               onClick={() => reload()}
-                              className="px-3 py-1 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-semibold rounded-full text-[11px] transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                              className="shrink-0 px-3 py-1.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-semibold rounded-full text-[11px] transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
                             >
                               <RefreshCw className="w-3 h-3" />
                               <span>Coba Lagi</span>
                             </button>
                           </div>
-                          <p className="text-[11px] leading-relaxed text-red-600">
+                          <p className="text-[11px] leading-relaxed text-red-600 break-words">
                             {error.message?.includes('Quota exceeded') || error.message?.includes('429') 
                               ? 'Batas penggunaan AI gratis (Google/GitHub API Quota) Anda sedang padat. Silakan klik "Coba Lagi" di atas atau tunggu beberapa detik.' 
                               : error.message || 'Gagal tersambung ke server AI. Klik tombol Coba Lagi di atas untuk mengirim ulang.'}
