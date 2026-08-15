@@ -649,7 +649,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       web_search: tool({
         description: 'Mencari informasi terkini dari internet (Web Search) seperti harga gadget/barang terbaru, kurs Rupiah/Valas, harga emas, inflasi, suku bunga bank, berita pasar/keuangan, promo, atau informasi publik lainnya.',
         parameters: z.object({
-          query: z.string().describe('Kata kunci pencarian yang spesifik (contoh: "harga iPhone 15 Pro Indonesia", "kurs USD ke IDR hari ini", "suku bunga BI rate terbaru").')
+          query: z.string().optional().default('').describe('Kata kunci pencarian yang spesifik (contoh: "harga iPhone 15 Pro Indonesia", "kurs USD ke IDR hari ini", "suku bunga BI rate terbaru").')
         }),
         execute: async ({ query }: { query: string }) => {
           try {
