@@ -767,37 +767,45 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
               // Engine 3: Wikipedia (ID & EN) untuk spesifikasi, fakta resmi, & ulasan lengkap
               (async () => {
                 const targetEntity = cleanEntity || query;
+                if (!targetEntity || targetEntity.length < 2) return [];
                 const engineResults: typeof results = [];
 
-                for (const lang of ['id', 'en']) {
-                  try {
+                const wikiLangs = ['id', 'en'];
+                const wikiSearches = await Promise.allSettled(
+                  wikiLangs.map(async (lang) => {
                     const wikiSearchUrl = `https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(targetEntity)}&format=json&origin=*&srlimit=2`;
-                    const res = await fetchWithTimeout(wikiSearchUrl, { headers: { 'User-Agent': 'FinancialAdvisorApp/1.0' } }, 3500);
-                    if (!res.ok) continue;
+                    const res = await fetchWithTimeout(wikiSearchUrl, { headers: { 'User-Agent': 'FinancialAdvisorApp/1.0' } }, 2500);
+                    if (!res.ok) return null;
                     const json = await res.json();
                     const wikiItems = json?.query?.search || [];
-                    if (wikiItems.length === 0) continue;
+                    if (wikiItems.length === 0) return null;
 
-                    // Ambil artikel paling relevan
                     const bestItem = wikiItems[0];
                     const extractUrl = `https://${lang}.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(bestItem.title)}&prop=extracts&explaintext=true&format=json&origin=*`;
-                    const extRes = await fetchWithTimeout(extractUrl, { headers: { 'User-Agent': 'FinancialAdvisorApp/1.0' } }, 3500);
+                    const extRes = await fetchWithTimeout(extractUrl, { headers: { 'User-Agent': 'FinancialAdvisorApp/1.0' } }, 2500);
                     if (extRes.ok) {
                       const extJson = await extRes.json();
                       const pages = extJson?.query?.pages || {};
                       const page = Object.values(pages)[0] as any;
                       if (page?.extract && page.extract.length > 60) {
-                        engineResults.push({
+                        return {
                           source: `📖 Wikipedia (${lang.toUpperCase()}) - ${bestItem.title}`,
                           title: bestItem.title,
                           snippet: page.extract.substring(0, 2000),
                           url: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(bestItem.title)}`
-                        });
-                        break; // Cukup 1 artikel terbaik
+                        };
                       }
                     }
-                  } catch (_) {}
-                }
+                    return null;
+                  })
+                );
+
+                wikiSearches.forEach((ws) => {
+                  if (ws.status === 'fulfilled' && ws.value) {
+                    engineResults.push(ws.value);
+                  }
+                });
+
                 return engineResults;
               })()
             ]);
@@ -1606,23 +1614,10 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
           tools: currentTools,
           toolChoice: toolChoiceSetting,
           maxSteps: 5,
+          maxRetries: 0, // Fallback langsung tanpa menunggu retries lambat jika kena 429
           abortSignal: req.signal,
           onFinish: onFinishCallback
         });
-
-        // Mengintip chunk pertama stream untuk menguji 429 Rate Limit sebelum merespons HTTP ke browser
-        const reader = candidateResult.fullStream[Symbol.asyncIterator]();
-        const firstChunkResult = await Promise.race([
-          reader.next(),
-          new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 1200))
-        ]) as any;
-
-        if (firstChunkResult && firstChunkResult.value && firstChunkResult.value.type === 'error') {
-          const errObj = firstChunkResult.value.error;
-          const errMsg = String(errObj?.message || errObj || '');
-          console.warn(`[AI Router] Model ${modelName} emitted 429/Quota error: ${errMsg}`);
-          continue; // Pindah ke model berikutnya di fallback cascade!
-        }
 
         result = candidateResult;
         activeModelUsed = modelName;
