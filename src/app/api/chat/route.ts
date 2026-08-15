@@ -1573,7 +1573,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       googleApiKey && 'gemini-2.5-flash',
       groqApiKey && 'llama-3.3-70b-versatile',
       openrouterApiKey && 'openai/gpt-oss-20b:free',
-      openrouterApiKey && 'deepseek/deepseek-r1:free',
+      openrouterApiKey && 'google/gemma-4-31b-it:free',
     ].filter(Boolean) as string[];
 
     const modelsToTry = Array.from(new Set(candidateModels));
