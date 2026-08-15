@@ -616,7 +616,12 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       '## FITUR PENCARIAN WEB (WEB SEARCH / ACCESS INTERNET)\n' +
       '- Kamu memiliki akses penuh ke internet secara real-time via tool `web_search`.\n' +
       '- Jika pengguna menanyakan info publik, skor pertandingan olahraga, berita terbaru, harga barang/gadget, promo, atau topik apa pun yang membutuhkan informasi dari internet, KAMU WAJIB MEMANGGIL `web_search` sebelum menjawab! DILARANG menolak pertanyaan jika kamu bisa mencari jawabannya via `web_search`.\n' +
-      '- **ATURAN PENTING HASIL SEARCH**: Jika kamu telah memanggil `web_search` untuk mencari topik tertentu (misalnya spesifikasi gadget, berita, perbandingan harga, skor bola), KAMU WAJIB MENJAWAB PERTANYAAN PENGGUNA BERDASARKAN HASIL DARI `web_search` SECARA FAKTUAL DAN LENGKAP! Rangkum spesifikasi kunci (prosesor/chipset, layar, RAM, kamera, baterai, fitur unggulan), poin kelebihan, dan detail nyata. DILARANG menjawab secara generik atau menebak jika rincian fakta telah disediakan oleh hasil pencarian.\n\n' +
+      '- **ATURAN PENTING HASIL SEARCH & LINK SUMBER (WAJIB)**:\n' +
+      '  1. Jawab pertanyaan pengguna berdasarkan hasil `web_search` secara faktual, mendalam (spesifikasi, angka, perbandingan), dan rapi.\n' +
+      '  2. **WAJIB MENYERTAKAN LINK SUMBER YANG BISA DIKLIK**: Di akhir setiap jawaban yang memakai hasil pencarian web, tambahkan bagian **🌐 Sumber Terkait:** yang memuat daftar tautan/link sumber dari hasil pencarian dalam format link Markdown, contoh:\n' +
+      '     * [Nama Media / Judul Artikel](URL)\n' +
+      '     * [Wikipedia: Judul Entitas](URL)\n' +
+      '     Selalu cantumkan URL asli dari data hasil pencarian agar pengguna dapat langsung mengklik dan memverifikasi sumbernya secara langsung.\n\n' +
       '## ATURAN PEMICU AKSI (WAJIB DIPATUHI)\n' +
       'Kamu HANYA boleh memanggil function/tool add_transaction, delete_transaction, create_transfer, atau add_saving_goal jika pesan user mengandung KATA KERJA IMPERATIF eksplisit yang secara langsung memerintahkan aksi, contoh: "catat", "tambahkan", "masukkan", "input", "simpan", "hapus", "batalkan", "hilangkan", "transfer", "pindahkan", "buat target". *Khusus untuk pemindaian struk belanja di atas, kamu berhak memanggil tool `extract_receipt_data` secara otomatis tanpa perlu perintah teks tambahan.*\n\n' +
       'Untuk tool `search_transactions`, kamu **DIPERBOLEHKAN** memanggilnya kapan saja pengguna menanyakan tentang riwayat pengeluaran masa lalu, total pembelian barang tertentu (misal: "berapa kali saya beli jago?"), atau mencari transaksi lama, bahkan tanpa kata kerja imperatif.\n\n' +
@@ -697,13 +702,16 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
                   const titleMatch = it.match(/<title>([\s\S]*?)<\/title>/);
                   const pubDateMatch = it.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
                   const sourceMatch = it.match(/<source[^>]*>([\s\S]*?)<\/source>/);
+                  const linkMatch = it.match(/<link>([\s\S]*?)<\/link>/) || it.match(/<guid[^>]*>([\s\S]*?)<\/guid>/);
                   if (titleMatch) {
                     const cleanTitle = titleMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').replace(/<[^>]*>/g, '').trim();
                     const sourceName = sourceMatch ? sourceMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').trim() : 'Google News';
+                    const articleUrl = linkMatch ? linkMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').trim() : undefined;
                     engineResults.push({
                       source: `📰 ${sourceName}`,
                       title: cleanTitle,
                       snippet: `${cleanTitle}${pubDateMatch ? ` (Dipublikasikan: ${pubDateMatch[1]})` : ''}`,
+                      url: articleUrl
                     });
                   }
                 }

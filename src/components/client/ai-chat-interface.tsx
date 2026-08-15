@@ -7,7 +7,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { Send, User, Bot, Loader2, RefreshCw, Plus, Trash2, Menu, MessageSquare, ChevronDown, Camera, Image as ImageIcon, ThumbsUp, ThumbsDown, Copy, Share2, Globe, Sparkles, Settings, HelpCircle, Check } from 'lucide-react';
+import { Send, User, Bot, Loader2, RefreshCw, Plus, Trash2, Menu, MessageSquare, ChevronDown, Camera, Image as ImageIcon, ThumbsUp, ThumbsDown, Copy, Share2, Globe, Sparkles, Settings, HelpCircle, Check, ExternalLink } from 'lucide-react';
 import { Button } from '../ui/button';
 
 const generateUUID = () => {
@@ -787,6 +787,18 @@ const MemoizedMessageBubble = React.memo(({
                   ),
                   th: ({node, ...props}) => <th className="bg-slate-50 font-bold p-2.5 text-xs text-black border-b border-slate-200" {...props} />,
                   td: ({node, ...props}) => <td className="p-2.5 text-xs border-b border-slate-100 last:border-0 text-slate-750" {...props} />,
+                  a: ({node, href, children, ...props}: any) => (
+                    <a 
+                      href={href} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-blue-600 hover:text-blue-800 underline font-medium inline-flex items-center gap-1 hover:underline break-all transition-colors" 
+                      {...props}
+                    >
+                      {children}
+                      <ExternalLink className="w-3 h-3 inline-block shrink-0 opacity-70" />
+                    </a>
+                  ),
                 }}
               >
                 {preprocessMath(cleanedContent)}
