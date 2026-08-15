@@ -489,15 +489,17 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
         try {
           console.time('Vision Pre-scan');
           
-          const ocrPrompt = `Kamu adalah sistem analisis gambar & OCR visual Indonesia yang sangat teliti.
-Tugas kamu adalah menganalisis dan membaca isi gambar ini secara lengkap.
+          const ocrPrompt = `Kamu adalah sistem analisis visual & OCR multimodal Indonesia yang sangat teliti, cerdas, dan serba bisa.
+Tugas kamu adalah menganalisis dan membaca isi gambar ini secara komprehensif.
 
-Dua Kemungkinan Jenis Gambar:
-1. STRUK / NOTA BELANJA: Tulis detail toko, tanggal, daftar item, subtotal, diskon, pajak, total bayar, metode pembayaran.
-2. PRODUCT PAGE / E-COMMERCE / SCREENSHOT WISHLIST / UMUM: Jika gambar berupa screenshot e-commerce (Shopee, Tokopedia, Bukalapak, TikTok), foto produk, price tag, HP, gadget, baju, dll, JELASKAN DETAIL PRODUK: Nama Barang/HP, Merk, Spesifikasi/Varian (misal: 12/256GB), Harga yang tertera (misal: Rp 11.775.000), Diskon jika ada, dan Nama Toko/Platform.
+Panduan Analisis Sesuai Jenis Gambar:
+1. STRUK / NOTA BELANJA: Tulis detail toko/merchant, tanggal, daftar item, subtotal, diskon, pajak, total bayar, metode pembayaran.
+2. HEWAN / TUMBUHAN / OBJEK / PEMANDANGAN / FOTO UMUM: Identifikasi nama objek/spesies/hewan (misal: cicak, kucing, burung, mobil, gedung, masakan, pemandangan), deskripsikan ciri-ciri fisik, warna, aktivitas, dan konteks visual secara mendetail.
+3. PRODUCT PAGE / E-COMMERCE / GADGET / WISHLIST: Jika gambar berupa screenshot e-commerce (Shopee, Tokopedia, TikTok Shop), foto produk, price tag, HP, gadget, baju, dll, jelaskan detail produk: Nama Barang/HP, Merk, Spesifikasi/Varian (misal: 12/256GB), Harga yang tertera, Diskon, dan Nama Platform.
+4. DOKUMEN / GRAFIK / CHART: Tuliskan teks penting, judul grafik, data angka utama, dan kesimpulan visual.
 
-JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia.
-DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG berikan hasil akhir deskripsi gambar saja.`;
+JANGAN gunakan format LaTeX. Gunakan Bahasa Indonesia yang natural.
+DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG berikan hasil akhir deskripsi gambar secara jelas.`;
 
           const visionPromptParts: any[] = [
             { type: 'text', text: ocrPrompt },
@@ -561,7 +563,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
           
           // Fallback if everything was inside think or empty
           if (!visionDescription) {
-            visionDescription = "Maaf, pembacaan foto struk terputus atau gagal dibaca (hanya berisi proses berpikir yang terpotong). Tolong bantu sebutkan manual isi struk tersebut.";
+            visionDescription = "Gambar berhasil diunggah namun pembacaan visual tidak mengembalikan teks deskriptif spesifik.";
           }
 
           console.timeEnd('Vision Pre-scan');
@@ -574,7 +576,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
             .map((p: any) => p.text)
             .join('\n');
 
-          const enhancedUserText = (textParts || 'Tolong periksa dan analisis gambar yang diunggah.') +
+          const enhancedUserText = (textParts || 'Tolong periksa dan jelaskan gambar yang diunggah.') +
             '\n\n--- HASIL PEMINDAIAN GAMBAR (Vision OCR) ---\n' + visionDescription +
             '\n--- AKHIR HASIL PEMINDAIAN ---';
 
@@ -599,20 +601,24 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     // ========== END TWO-PASS VISION ==========
 
     let systemInstructions = systemPrompt + '\n\n' + 
-      '## ATURAN EVALUASI GAMBAR (VISION & PEMINDAI STRUK BELANJA)\n' +
+      '## ATURAN EVALUASI GAMBAR (VISION & MULTIMODAL CHAT)\n' +
       'Ketika pengguna mengunggah gambar/foto:\n' +
-      '1. **KONSULTASI, WISHLIST & PRODUK E-COMMERCE (BUKAN STRUK)**:\n' +
-      '   - Jika gambar berupa screenshot e-commerce (Shopee, Tokopedia, Bukalapak, TikTok Shop), produk (HP, gadget, baju, kendaraan, barang impian), price tag, chart, atau gambar umum,\n' +
-      '   - DAN/ATAU pengguna bertanya/berkonsultasi (misalnya: "worth it gak?", "menurutmu gimana?", "mending beli kapan?", "kemahalan gak?", "apakah uangku cukup?"),\n' +
-      '   - KAMU WAJIB MENJAWAB VIA TEKS DENGAN SARAN & KONSULTASI KEUANGAN CERDAS!\n' +
-      '   - **DILARANG KERAS** memanggil tool `extract_receipt_data` untuk gambar konsultasi/produk/wishlist e-commerce!\n\n' +
-      '2. **PENCATATAN STRUK BELANJA RESMI**:\n' +
+      '1. **FOTO UMUM, HEWAN, TUMBUHAN, OBJEK, MAKANAN, & PEMANDANGAN**:\n' +
+      '   - Jika gambar adalah foto hewan (misal cicak, kucing, burung), objek, pemandangan, masakan, karya seni, atau foto umum apa saja,\n' +
+      '   - JAWAB PERTANYAAN PENGGUNA SECARA NATURAL, CERDAS, DAN RAMAH (misal menjelaskan jenis hewan, ciri uniknya, habitat, fungsi objek, atau mengapresiasi foto tersebut) berdasarkan hasil pemindaian visual.\n' +
+      '   - **DILARANG KERAS** memanggil tool transaksi/struk belanja untuk foto umum/hewan!\n\n' +
+      '2. **KONSULTASI, WISHLIST & PRODUK E-COMMERCE (BUKAN STRUK)**:\n' +
+      '   - Jika gambar berupa screenshot e-commerce (Shopee, Tokopedia, TikTok Shop), produk (HP, gadget, baju, kendaraan), price tag, chart,\n' +
+      '   - DAN/ATAU pengguna bertanya/berkonsultasi ("worth it gak?", "menurutmu gimana?", "mending beli kapan?"),\n' +
+      '   - JAWAB VIA TEKS dengan saran & konsultasi keuangan cerdas tanpa memanggil tool struk belanja!\n' +
+      '   - DILARANG KERAS memanggil tool `extract_receipt_data` untuk gambar konsultasi/produk/wishlist e-commerce!\n\n' +
+      '3. **PENCATATAN STRUK BELANJA RESMI**:\n' +
       '   - Tool `extract_receipt_data` HANYA boleh dipanggil JIKA gambar adalah **struk belanja/nota transaksi resmi yang sudah selesai dibayar** (ada nama merchant/toko, daftar item belanja, total bayar, tanggal transaksi) AND pengguna bermaksud mencatat pengeluaran tersebut.\n' +
       '   - **DILARANG** memanggil tool `extract_receipt_data` lebih dari 1 kali dalam 1 giliran pesan!\n' +
       '   - Jangan pernah memanggil tool `add_transaction` secara langsung untuk struk belanja. Proses pencatatan struk harus melalui tool `extract_receipt_data` terlebih dahulu agar pengguna dapat memverifikasi datanya lewat kartu konfirmasi di UI.\n' +
       '   - Setelah memanggil `extract_receipt_data` dan menerima hasilnya, sampaikan penjelasan ramah bahwa draf data struk belanja telah berhasil diekstrak dan minta pengguna untuk memeriksa dan menyimpannya melalui kartu konfirmasi yang muncul di bawah obrolan.\n\n' +
-      '3. **GAMBAR BURAM / TIDAK TERBACA**:\n' +
-      '   - Jika gambar bukan struk belanja yang valid saat user ingin mencatat, atau sangat buram/terpotong, jelaskan secara sopan lewat teks tanpa memanggil tool.\n\n' +
+      '4. **GAMBAR BURAM / TIDAK TERBACA**:\n' +
+      '   - Jika gambar sangat buram atau terpotong, jelaskan secara sopan lewat teks tanpa memanggil tool.\n\n' +
       '## FITUR PENCARIAN WEB (WEB SEARCH / ACCESS INTERNET)\n' +
       '- Kamu memiliki akses penuh ke internet secara real-time via tool `web_search`.\n' +
       '- Jika pengguna menanyakan info publik, skor pertandingan olahraga, berita terbaru, harga barang/gadget, promo, atau topik apa pun yang membutuhkan informasi dari internet, KAMU WAJIB MEMANGGIL `web_search` sebelum menjawab! DILARANG menolak pertanyaan jika kamu bisa mencari jawabannya via `web_search`.\n' +
