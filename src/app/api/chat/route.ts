@@ -1529,6 +1529,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     }
     // Model Groq Llama 8B tidak mendukung tool calling dengan baik (output <function> XML)
     // Nonaktifkan web_search untuk model kecil agar tidak menghasilkan raw function text
+    // llama-3.1-8b-instant secara eksplisit TIDAK termasuk di sini (8b terlalu kecil untuk tool calling)
     const modelsSupportingTools = ['gemini', 'llama-3.3-70b', 'deepseek', 'openai', 'gpt'];
     const supportsWebSearch = modelsSupportingTools.some(m => primaryModel.includes(m));
     if (!supportsWebSearch) {
@@ -1553,11 +1554,12 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     };
 
     // Daftar urutan fallback model
+    // CATATAN: llama-3.1-8b-instant DIHAPUS dari fallback — model kecil ini tidak reliabel
+    // untuk tool calling dan sering menghasilkan raw XML <function> sebagai teks biasa.
     const candidateModels = [
       primaryModel,
       googleApiKey && 'gemini-2.5-flash',
       groqApiKey && 'llama-3.3-70b-versatile',
-      groqApiKey && 'llama-3.1-8b-instant',
       openrouterApiKey && 'openai/gpt-oss-20b:free',
       openrouterApiKey && 'deepseek/deepseek-r1:free',
     ].filter(Boolean) as string[];
