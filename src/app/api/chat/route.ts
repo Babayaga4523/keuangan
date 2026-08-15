@@ -616,7 +616,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       '## FITUR PENCARIAN WEB (WEB SEARCH / ACCESS INTERNET)\n' +
       '- Kamu memiliki akses penuh ke internet secara real-time via tool `web_search`.\n' +
       '- Jika pengguna menanyakan info publik, skor pertandingan olahraga, berita terbaru, harga barang/gadget, promo, atau topik apa pun yang membutuhkan informasi dari internet, KAMU WAJIB MEMANGGIL `web_search` sebelum menjawab! DILARANG menolak pertanyaan jika kamu bisa mencari jawabannya via `web_search`.\n' +
-      '- **ATURAN PENTING HASIL SEARCH**: Jika kamu telah memanggil `web_search` untuk mencari topik tertentu (misalnya skor atau statistik pertandingan bola, berita, gadget, dll), KAMU WAJIB MENJAWAB PERTANYAAN PENGGUNA BERDASARKAN HASIL DARI `web_search` TERSEBUT! DILARANG keras mengganti konteks jawaban menjadi laporan statistik keuangan pengguna jika pemanggilan `web_search` telah dilakukan.\n\n' +
+      '- **ATURAN PENTING HASIL SEARCH**: Jika kamu telah memanggil `web_search` untuk mencari topik tertentu (misalnya spesifikasi gadget, berita, perbandingan harga, skor bola), KAMU WAJIB MENJAWAB PERTANYAAN PENGGUNA BERDASARKAN HASIL DARI `web_search` SECARA FAKTUAL DAN LENGKAP! Rangkum spesifikasi kunci (prosesor/chipset, layar, RAM, kamera, baterai, fitur unggulan), poin kelebihan, dan detail nyata. DILARANG menjawab secara generik atau menebak jika rincian fakta telah disediakan oleh hasil pencarian.\n\n' +
       '## ATURAN PEMICU AKSI (WAJIB DIPATUHI)\n' +
       'Kamu HANYA boleh memanggil function/tool add_transaction, delete_transaction, create_transfer, atau add_saving_goal jika pesan user mengandung KATA KERJA IMPERATIF eksplisit yang secara langsung memerintahkan aksi, contoh: "catat", "tambahkan", "masukkan", "input", "simpan", "hapus", "batalkan", "hilangkan", "transfer", "pindahkan", "buat target". *Khusus untuk pemindaian struk belanja di atas, kamu berhak memanggil tool `extract_receipt_data` secara otomatis tanpa perlu perintah teks tambahan.*\n\n' +
       'Untuk tool `search_transactions`, kamu **DIPERBOLEHKAN** memanggilnya kapan saja pengguna menanyakan tentang riwayat pengeluaran masa lalu, total pembelian barang tertentu (misal: "berapa kali saya beli jago?"), atau mencari transaksi lama, bahkan tanpa kata kerja imperatif.\n\n' +
@@ -673,10 +673,16 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
               }
             };
 
-            // Jalankan semua engine secara paralel untuk kecepatan maksimal
+            // Bersihkan query untuk pencarian entitas/ensiklopedia (menghapus kata tanya & pengantar)
+            const cleanEntity = query
+              .replace(/(apa|siapa|kapan|dimana|kenapa|bagaimana|berapa|keunggulan|kelebihan|kekurangan|spesifikasi|spek|harga|review|fitur|perbedaan|tentang|soal|apakah|menurutmu)\s+/gi, '')
+              .replace(/\s+(basic|pro|plus|ultra|max|baru|terbaru|terkini)$/gi, '')
+              .trim();
+
+            // Jalankan semua engine secara paralel untuk kecepatan dan kelengkapan data maksimal
             const [gnewsResult, ddgResult, wikiResult] = await Promise.allSettled([
 
-              // Engine 1: Google News RSS (berita real-time Indonesia)
+              // Engine 1: Google News RSS (berita & kabar real-time Indonesia)
               (async () => {
                 const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=id&gl=ID&ceid=ID:id`;
                 const res = await fetchWithTimeout(rssUrl, {
@@ -686,27 +692,25 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
                 const xml = await res.text();
                 const itemMatches = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
                 const engineResults: typeof results = [];
-                for (let i = 0; i < Math.min(itemMatches.length, 6); i++) {
+                for (let i = 0; i < Math.min(itemMatches.length, 5); i++) {
                   const it = itemMatches[i];
                   const titleMatch = it.match(/<title>([\s\S]*?)<\/title>/);
                   const pubDateMatch = it.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
-                  const descMatch = it.match(/<description>([\s\S]*?)<\/description>/);
                   const sourceMatch = it.match(/<source[^>]*>([\s\S]*?)<\/source>/);
                   if (titleMatch) {
                     const cleanTitle = titleMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').replace(/<[^>]*>/g, '').trim();
-                    const cleanDesc = descMatch ? descMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').replace(/<[^>]*>/g, '').trim() : '';
                     const sourceName = sourceMatch ? sourceMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').trim() : 'Google News';
                     engineResults.push({
                       source: `📰 ${sourceName}`,
                       title: cleanTitle,
-                      snippet: cleanDesc.length > 20 ? cleanDesc.substring(0, 500) : (pubDateMatch ? `Dipublikasikan: ${pubDateMatch[1]}` : cleanTitle),
+                      snippet: `${cleanTitle}${pubDateMatch ? ` (Dipublikasikan: ${pubDateMatch[1]})` : ''}`,
                     });
                   }
                 }
                 return engineResults;
               })(),
 
-              // Engine 2: DuckDuckGo Instant Answer API (zero-click, tanpa API key)
+              // Engine 2: DuckDuckGo Instant Answer API (definisi langsung & topik terkait)
               (async () => {
                 const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_redirect=1&no_html=1&skip_disambig=1`;
                 const res = await fetchWithTimeout(ddgUrl, {
@@ -719,7 +723,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
                   engineResults.push({
                     source: `🦆 DuckDuckGo (${json.AbstractSource || 'Web'})`,
                     title: json.Heading || query,
-                    snippet: json.Abstract.substring(0, 700),
+                    snippet: json.Abstract.substring(0, 800),
                     url: json.AbstractURL || undefined
                   });
                 }
@@ -727,7 +731,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
                   engineResults.push({
                     source: '🦆 DuckDuckGo Instant',
                     title: `Jawaban: ${query}`,
-                    snippet: json.Answer.substring(0, 400),
+                    snippet: json.Answer.substring(0, 500),
                   });
                 }
                 if (json.RelatedTopics) {
@@ -737,7 +741,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
                       engineResults.push({
                         source: '🦆 DuckDuckGo Related',
                         title: topic.FirstURL ? decodeURIComponent(topic.FirstURL.split('/').pop() || '').replace(/_/g, ' ') : query,
-                        snippet: topic.Text.substring(0, 400),
+                        snippet: topic.Text.substring(0, 500),
                         url: topic.FirstURL || undefined
                       });
                     }
@@ -746,39 +750,39 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
                 return engineResults;
               })(),
 
-              // Engine 3: Wikipedia Indonesia (konten ensiklopedis lengkap)
+              // Engine 3: Wikipedia (ID & EN) untuk spesifikasi, fakta resmi, & ulasan lengkap
               (async () => {
-                const wikiSearchUrl = `https://id.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*&srlimit=3`;
-                const res = await fetchWithTimeout(wikiSearchUrl, {}, 3500);
-                if (!res.ok) return [];
-                const json = await res.json();
-                const wikiItems = json?.query?.search || [];
-                if (wikiItems.length === 0) return [];
+                const targetEntity = cleanEntity || query;
                 const engineResults: typeof results = [];
-                try {
-                  const extractUrl = `https://id.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(wikiItems[0].title)}&prop=extracts&exintro=true&explaintext=true&format=json&origin=*`;
-                  const extRes = await fetchWithTimeout(extractUrl, {}, 3000);
-                  if (extRes.ok) {
-                    const extJson = await extRes.json();
-                    const pages = extJson?.query?.pages || {};
-                    const page = Object.values(pages)[0] as any;
-                    if (page?.extract && page.extract.length > 50) {
-                      engineResults.push({
-                        source: '📖 Wikipedia Indonesia',
-                        title: page.title || wikiItems[0].title,
-                        snippet: page.extract.substring(0, 900),
-                        url: `https://id.wikipedia.org/wiki/${encodeURIComponent(wikiItems[0].title)}`
-                      });
+
+                for (const lang of ['id', 'en']) {
+                  try {
+                    const wikiSearchUrl = `https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(targetEntity)}&format=json&origin=*&srlimit=2`;
+                    const res = await fetchWithTimeout(wikiSearchUrl, { headers: { 'User-Agent': 'FinancialAdvisorApp/1.0' } }, 3500);
+                    if (!res.ok) continue;
+                    const json = await res.json();
+                    const wikiItems = json?.query?.search || [];
+                    if (wikiItems.length === 0) continue;
+
+                    // Ambil artikel paling relevan
+                    const bestItem = wikiItems[0];
+                    const extractUrl = `https://${lang}.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(bestItem.title)}&prop=extracts&explaintext=true&format=json&origin=*`;
+                    const extRes = await fetchWithTimeout(extractUrl, { headers: { 'User-Agent': 'FinancialAdvisorApp/1.0' } }, 3500);
+                    if (extRes.ok) {
+                      const extJson = await extRes.json();
+                      const pages = extJson?.query?.pages || {};
+                      const page = Object.values(pages)[0] as any;
+                      if (page?.extract && page.extract.length > 60) {
+                        engineResults.push({
+                          source: `📖 Wikipedia (${lang.toUpperCase()}) - ${bestItem.title}`,
+                          title: bestItem.title,
+                          snippet: page.extract.substring(0, 2000),
+                          url: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(bestItem.title)}`
+                        });
+                        break; // Cukup 1 artikel terbaik
+                      }
                     }
-                  }
-                } catch (_) {
-                  const cleanSnippet = (wikiItems[0].snippet || '').replace(/<[^>]*>/g, '').trim();
-                  engineResults.push({
-                    source: '📖 Wikipedia Indonesia',
-                    title: wikiItems[0].title,
-                    snippet: cleanSnippet,
-                    url: `https://id.wikipedia.org/wiki/${encodeURIComponent(wikiItems[0].title)}`
-                  });
+                  } catch (_) {}
                 }
                 return engineResults;
               })()
@@ -786,8 +790,8 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
 
             // Gabungkan semua hasil
             if (gnewsResult.status === 'fulfilled') results.push(...gnewsResult.value);
-            if (ddgResult.status === 'fulfilled') results.push(...ddgResult.value);
             if (wikiResult.status === 'fulfilled') results.push(...wikiResult.value);
+            if (ddgResult.status === 'fulfilled') results.push(...ddgResult.value);
 
             console.log(`[Web Search] Raw results: ${results.length} for "${query}"`);
 
