@@ -1554,11 +1554,8 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     if (!hasAttachments && !isMultimodal) {
       delete effectiveTools.extract_receipt_data;
     }
-    // Model Groq (termasuk llama-3.3-70b) kadang mengirim null sebagai argumen tool call,
-    // menyebabkan AI_InvalidToolArgumentsError. Hanya model Gemini, DeepSeek, OpenAI, GPT
-    // yang terbukti reliabel memanggil web_search dengan argumen yang valid.
-    // llama-3.1-8b-instant dan llama-3.3-70b-versatile (Groq) DIEKSKLUSI dari daftar ini.
-    const modelsSupportingTools = ['gemini', 'deepseek', 'openai', 'gpt'];
+    // Model yang terbukti handal memanggil tools & web_search
+    const modelsSupportingTools = ['gemini', 'llama-3.3-70b', 'deepseek', 'openai', 'gpt', 'gemma'];
     const supportsWebSearch = modelsSupportingTools.some(m => primaryModel.includes(m));
     if (!supportsWebSearch) {
       delete effectiveTools.web_search;
@@ -1608,9 +1605,19 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
           console.log(`[AI Router] web_search disabled for fallback model ${modelName}`);
         }
 
+        // Jika web_search tidak tersedia di tools, bersihkan instruksi web_search dari system prompt
+        // agar model tidak memanggil tool 'web_search' yang tidak terdaftar di request.tools (Groq 400 error)
+        let candidateSystem = systemInstructions;
+        if (!currentTools.web_search) {
+          candidateSystem = systemInstructions.replace(
+            /## FITUR PENCARIAN WEB[\s\S]*?## ATURAN PEMICU AKSI/m,
+            '## ATURAN PEMICU AKSI'
+          );
+        }
+
         const candidateResult = await streamText({
           model: getModelInstance(modelName),
-          system: systemInstructions,
+          system: candidateSystem,
           messages: recentMessages,
           temperature: 0.2,
           tools: currentTools,
