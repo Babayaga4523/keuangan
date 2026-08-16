@@ -660,12 +660,13 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       web_search: tool({
         description: 'Mencari informasi terkini dari internet (Web Search) seperti harga gadget/barang terbaru, kurs Rupiah/Valas, harga emas, inflasi, suku bunga bank, berita pasar/keuangan, promo, atau informasi publik lainnya.',
         parameters: z.object({
-          query: z.string().optional().default('').describe('Kata kunci pencarian yang spesifik (contoh: "harga iPhone 15 Pro Indonesia", "kurs USD ke IDR hari ini", "suku bunga BI rate terbaru").')
-        }),
-        execute: async ({ query }: { query: string }) => {
+          query: z.string().nullable().optional().default('').describe('Kata kunci pencarian yang spesifik (contoh: "harga iPhone 15 Pro Indonesia", "kurs USD ke IDR hari ini", "suku bunga BI rate terbaru").')
+        }).passthrough(),
+        execute: async ({ query: rawQuery }: { query: string | null }) => {
+          const query: string = rawQuery ?? '';
           try {
             // Guard: query harus ada dan tidak kosong
-            if (!query || typeof query !== 'string' || query.trim() === '') {
+            if (!query || query.trim() === '') {
               return { success: false, query: '', message: 'Parameter "query" wajib diisi. Harap tentukan kata kunci pencarian terlebih dahulu.' };
             }
             console.log(`[Web Search Tool] Searching: "${query}"`);
@@ -1553,10 +1554,11 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     if (!hasAttachments && !isMultimodal) {
       delete effectiveTools.extract_receipt_data;
     }
-    // Model Groq Llama 8B tidak mendukung tool calling dengan baik (output <function> XML)
-    // Nonaktifkan web_search untuk model kecil agar tidak menghasilkan raw function text
-    // llama-3.1-8b-instant secara eksplisit TIDAK termasuk di sini (8b terlalu kecil untuk tool calling)
-    const modelsSupportingTools = ['gemini', 'llama-3.3-70b', 'deepseek', 'openai', 'gpt'];
+    // Model Groq (termasuk llama-3.3-70b) kadang mengirim null sebagai argumen tool call,
+    // menyebabkan AI_InvalidToolArgumentsError. Hanya model Gemini, DeepSeek, OpenAI, GPT
+    // yang terbukti reliabel memanggil web_search dengan argumen yang valid.
+    // llama-3.1-8b-instant dan llama-3.3-70b-versatile (Groq) DIEKSKLUSI dari daftar ini.
+    const modelsSupportingTools = ['gemini', 'deepseek', 'openai', 'gpt'];
     const supportsWebSearch = modelsSupportingTools.some(m => primaryModel.includes(m));
     if (!supportsWebSearch) {
       delete effectiveTools.web_search;
