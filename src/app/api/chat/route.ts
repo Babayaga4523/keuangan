@@ -825,53 +825,22 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
             if (wikiResult.status === 'fulfilled') results.push(...wikiResult.value);
             if (ddgResult.status === 'fulfilled') results.push(...ddgResult.value);
 
-            console.log(`[Web Search] Raw results: ${results.length} for "${query}"`);
+            // Batasi 4-5 hasil paling relevan dengan snippet ringkas agar tidak menembus batas token Groq (8000 TPM)
+            const cleanResults = results.slice(0, 4).map(r => ({
+              source: r.source,
+              title: r.title,
+              snippet: r.snippet.length > 200 ? r.snippet.substring(0, 200) + '…' : r.snippet,
+              url: r.url
+            }));
 
-            // Engine 4: Jina.ai Reader - baca konten lengkap halaman web (gratis, tanpa API key)
-            const urlsToScrape = results
-              .filter(r => r.url && !r.url.includes('wikipedia.org') && !r.url.includes('duckduckgo.com'))
-              .slice(0, 2)
-              .map(r => r.url as string);
-
-            if (urlsToScrape.length > 0) {
-              const scrapeResults = await Promise.allSettled(
-                urlsToScrape.map(async (url) => {
-                  const jinaUrl = `https://r.jina.ai/${url}`;
-                  const res = await fetchWithTimeout(jinaUrl, {
-                    headers: {
-                      'Accept': 'text/plain',
-                      'X-Timeout': '7',
-                      'X-Remove-Selector': 'nav,header,footer,.ad,#ad,.advertisement,.sidebar,.cookie-notice',
-                      'X-Return-Format': 'text',
-                    }
-                  }, 9000);
-                  if (res.ok) {
-                    const text = await res.text();
-                    const cleanText = text.replace(/\n{3,}/g, '\n\n').trim();
-                    return { url, text: cleanText.substring(0, 1800) };
-                  }
-                  return null;
-                })
-              );
-              scrapeResults.forEach((result) => {
-                if (result.status === 'fulfilled' && result.value) {
-                  const { url, text } = result.value;
-                  const existingIdx = results.findIndex(r => r.url === url);
-                  if (existingIdx >= 0 && text.length > 100) {
-                    results[existingIdx].article_full_body = text;
-                  }
-                }
-              });
-            }
-
-            if (results.length > 0) {
-              console.log(`[Web Search] ✅ Returning ${Math.min(results.length, 10)} results for: "${query}"`);
+            if (cleanResults.length > 0) {
+              console.log(`[Web Search] ✅ Returning ${cleanResults.length} compact results for: "${query}"`);
               return {
                 success: true,
                 query,
-                results: results.slice(0, 10),
+                results: cleanResults,
                 timestamp: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
-                total_sources: results.length
+                total_sources: cleanResults.length
               };
             }
 
