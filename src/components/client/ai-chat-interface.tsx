@@ -1164,8 +1164,21 @@ export default function AiChatInterface() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      const validModels = [
+        'auto',
+        'gemini-2.5-flash',
+        'openai/gpt-oss-120b',
+        'openai/gpt-oss-20b',
+        'qwen/qwen3.6-27b',
+        'openai/gpt-oss-20b:free',
+      ];
       const saved = localStorage.getItem('user_preferred_ai_model');
-      if (saved) setSelectedModel(saved);
+      if (saved && validModels.includes(saved)) {
+        setSelectedModel(saved);
+      } else if (saved) {
+        localStorage.setItem('user_preferred_ai_model', 'auto');
+        setSelectedModel('auto');
+      }
     }
   }, []);
 
@@ -1683,12 +1696,12 @@ export default function AiChatInterface() {
               >
                 <GeminiSparkleIcon className="w-4 h-4" />
                 <span>
-                  {selectedModel === 'auto' && '🤖 Auto (Smart Fallback)'}
+                  {selectedModel === 'auto' && '🤖 Auto (Smart Switch)'}
                   {selectedModel === 'gemini-2.5-flash' && '⚡ Gemini 2.5 Flash'}
-                  {selectedModel === 'llama-3.3-70b-versatile' && '🚀 Groq Llama 3.3 70B'}
-                  {selectedModel === 'llama-3.1-8b-instant' && '⚡ Groq Llama 3.1 8B'}
+                  {selectedModel === 'openai/gpt-oss-120b' && '🚀 Groq GPT-OSS 120B'}
+                  {selectedModel === 'openai/gpt-oss-20b' && '⚡ Groq GPT-OSS 20B'}
+                  {selectedModel === 'qwen/qwen3.6-27b' && '🧠 Groq Qwen 3.6 27B'}
                   {selectedModel === 'openai/gpt-oss-20b:free' && '🆓 OpenRouter GPT-OSS'}
-                  {selectedModel === 'deepseek/deepseek-r1:free' && '🧠 OpenRouter DeepSeek R1'}
                 </span>
                 <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
               </button>
@@ -1707,7 +1720,7 @@ export default function AiChatInterface() {
                         <span>🤖</span>
                         <div>
                           <p className="font-bold">Auto (Smart Switch)</p>
-                          <p className="text-[10px] text-slate-400 font-normal">Otomatis pindah jika limit</p>
+                          <p className="text-[10px] text-slate-400 font-normal">Otomatis pilih terbaik & fallback</p>
                         </div>
                       </div>
                       {selectedModel === 'auto' && <Check className="w-3.5 h-3.5 text-blue-600" />}
@@ -1721,38 +1734,52 @@ export default function AiChatInterface() {
                         <span>⚡</span>
                         <div>
                           <p className="font-bold">Google Gemini 2.5 Flash</p>
-                          <p className="text-[10px] text-slate-400 font-normal">Multimodal & Cepat</p>
+                          <p className="text-[10px] text-slate-400 font-normal">Multimodal, Cepat & Cerdas</p>
                         </div>
                       </div>
                       {selectedModel === 'gemini-2.5-flash' && <Check className="w-3.5 h-3.5 text-blue-600" />}
                     </button>
 
                     <button 
-                      onClick={() => handleSelectModel('llama-3.3-70b-versatile')}
-                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors ${selectedModel === 'llama-3.3-70b-versatile' ? 'bg-blue-50 text-blue-900 font-bold' : 'hover:bg-slate-50 text-slate-700'}`}
+                      onClick={() => handleSelectModel('openai/gpt-oss-120b')}
+                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors ${selectedModel === 'openai/gpt-oss-120b' ? 'bg-blue-50 text-blue-900 font-bold' : 'hover:bg-slate-50 text-slate-700'}`}
                     >
                       <div className="flex items-center gap-2">
                         <span>🚀</span>
                         <div>
-                          <p className="font-bold">Groq Llama 3.3 70B</p>
-                          <p className="text-[10px] text-slate-400 font-normal">Penalaran Mendalam</p>
+                          <p className="font-bold">Groq GPT-OSS 120B</p>
+                          <p className="text-[10px] text-slate-400 font-normal">Penalaran Mendalam (305ms)</p>
                         </div>
                       </div>
-                      {selectedModel === 'llama-3.3-70b-versatile' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                      {selectedModel === 'openai/gpt-oss-120b' && <Check className="w-3.5 h-3.5 text-blue-600" />}
                     </button>
 
                     <button 
-                      onClick={() => handleSelectModel('llama-3.1-8b-instant')}
-                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors ${selectedModel === 'llama-3.1-8b-instant' ? 'bg-blue-50 text-blue-900 font-bold' : 'hover:bg-slate-50 text-slate-700'}`}
+                      onClick={() => handleSelectModel('openai/gpt-oss-20b')}
+                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors ${selectedModel === 'openai/gpt-oss-20b' ? 'bg-blue-50 text-blue-900 font-bold' : 'hover:bg-slate-50 text-slate-700'}`}
                     >
                       <div className="flex items-center gap-2">
                         <span>⚡</span>
                         <div>
-                          <p className="font-bold">Groq Llama 3.1 8B</p>
-                          <p className="text-[10px] text-slate-400 font-normal">Respons Instant</p>
+                          <p className="font-bold">Groq GPT-OSS 20B</p>
+                          <p className="text-[10px] text-slate-400 font-normal">Respons Super Cepat (300ms)</p>
                         </div>
                       </div>
-                      {selectedModel === 'llama-3.1-8b-instant' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                      {selectedModel === 'openai/gpt-oss-20b' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </button>
+
+                    <button 
+                      onClick={() => handleSelectModel('qwen/qwen3.6-27b')}
+                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors ${selectedModel === 'qwen/qwen3.6-27b' ? 'bg-blue-50 text-blue-900 font-bold' : 'hover:bg-slate-50 text-slate-700'}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>🧠</span>
+                        <div>
+                          <p className="font-bold">Groq Qwen 3.6 27B</p>
+                          <p className="text-[10px] text-slate-400 font-normal">Penalaran Alternatif (128ms)</p>
+                        </div>
+                      </div>
+                      {selectedModel === 'qwen/qwen3.6-27b' && <Check className="w-3.5 h-3.5 text-blue-600" />}
                     </button>
 
                     <button 
@@ -1767,20 +1794,6 @@ export default function AiChatInterface() {
                         </div>
                       </div>
                       {selectedModel === 'openai/gpt-oss-20b:free' && <Check className="w-3.5 h-3.5 text-blue-600" />}
-                    </button>
-
-                    <button 
-                      onClick={() => handleSelectModel('deepseek/deepseek-r1:free')}
-                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors ${selectedModel === 'deepseek/deepseek-r1:free' ? 'bg-blue-50 text-blue-900 font-bold' : 'hover:bg-slate-50 text-slate-700'}`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span>🧠</span>
-                        <div>
-                          <p className="font-bold">OpenRouter DeepSeek R1</p>
-                          <p className="text-[10px] text-slate-400 font-normal">Deep Reasoning</p>
-                        </div>
-                      </div>
-                      {selectedModel === 'deepseek/deepseek-r1:free' && <Check className="w-3.5 h-3.5 text-blue-600" />}
                     </button>
                   </div>
                 </>
