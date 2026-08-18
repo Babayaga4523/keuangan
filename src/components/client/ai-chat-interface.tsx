@@ -958,7 +958,7 @@ const MemoizedMessageBubble = React.memo(({
                   />
                 );
               } else if (toolInv.toolName === 'web_search') {
-                const query = toolInv.args?.query || 'Mencari di web...';
+                const query = toolInv.args?.query || (prevUserContent ? prevUserContent : 'Mencari di web...');
                 const result = toolInv.result;
                 const isExecuting = toolInv.state === 'call' || !result;
                 const resultCount = result?.results?.length || 0;
