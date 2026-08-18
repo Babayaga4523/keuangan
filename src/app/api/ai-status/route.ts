@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 export const revalidate = 0;
 
@@ -118,7 +118,7 @@ export async function GET() {
       // Per-model real rate limit from chat/completions headers
       const modelsToTest = [
         { id: 'openai/gpt-oss-20b:free', name: 'OpenRouter GPT-OSS 20B (Free)' },
-        { id: 'deepseek/deepseek-r1:free', name: 'OpenRouter DeepSeek R1 (Free)' },
+        { id: 'google/gemma-4-26b-a4b-it:free', name: 'OpenRouter Gemma 4 26B (Free)' },
       ];
 
       for (const mObj of modelsToTest) {
@@ -247,8 +247,9 @@ export async function GET() {
       }
 
       const groqModelsToTest = [
-        { id: 'llama-3.3-70b-versatile', name: 'Groq Llama 3.3 70B Versatile' },
-        { id: 'llama-3.1-8b-instant', name: 'Groq Llama 3.1 8B Instant' },
+        { id: 'openai/gpt-oss-120b', name: 'Groq GPT-OSS 120B' },
+        { id: 'openai/gpt-oss-20b', name: 'Groq GPT-OSS 20B' },
+        { id: 'qwen/qwen3.6-27b', name: 'Groq Qwen 3.6 27B' },
       ];
 
       for (const mObj of groqModelsToTest) {

@@ -1501,24 +1501,26 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       selectedMode = (hasAttachments || isMultimodal) ? 'VISION (Gemini 2.5 Flash)' : isHeavyAnalysis ? 'HEAVY ANALYSIS (Gemini 2.5 Flash)' : 'GENERAL (Gemini 2.5 Flash)';
     } else if (hasAttachments || isMultimodal) {
       selectedMode = 'VISION (OCR Struk Belanja)';
-      primaryModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'openai/gpt-oss-20b:free';
+      primaryModel = groqApiKey ? 'openai/gpt-oss-120b' : 'openai/gpt-oss-20b:free';
     } else if (isHeavyAnalysis) {
       selectedMode = 'HEAVY ANALYSIS (Penalaran Mendalam)';
-      primaryModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'openai/gpt-oss-20b:free';
+      primaryModel = groqApiKey ? 'openai/gpt-oss-120b' : 'openai/gpt-oss-20b:free';
     } else {
       selectedMode = 'GENERAL (Chat & Web Search)';
-      primaryModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'openai/gpt-oss-20b:free';
+      primaryModel = groqApiKey ? 'openai/gpt-oss-120b' : 'openai/gpt-oss-20b:free';
     }
 
     console.log(`[AI Router] Mode: ${selectedMode} | Model Target: ${primaryModel}`);
 
-    const modelIdentityText = primaryModel.includes('llama')
-      ? 'Groq Llama (Meta AI)'
-      : primaryModel.includes('gemini')
+    const modelIdentityText = primaryModel.includes('gemini')
       ? 'Google Gemini 2.5 Flash'
-      : primaryModel.includes('deepseek')
-      ? 'DeepSeek R1 (OpenRouter)'
-      : 'OpenRouter GPT-OSS';
+      : primaryModel.includes('llama')
+      ? 'Meta Llama 3.3'
+      : primaryModel.includes('gpt-oss')
+      ? 'GPT-OSS (Groq / OpenRouter)'
+      : primaryModel.includes('qwen')
+      ? 'Qwen 3.6 (Groq)'
+      : 'AI Financial Assistant';
 
     systemInstructions = systemInstructions.replace(
       '# IDENTITAS\nKamu adalah **Opin**, AI Financial Advisor pribadi yang cerdas, suportif, dan jujur.',
@@ -1555,7 +1557,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       delete effectiveTools.extract_receipt_data;
     }
     // Model yang terbukti handal memanggil tools & web_search
-    const modelsSupportingTools = ['gemini', 'llama-3.3-70b', 'deepseek', 'openai', 'gpt', 'gemma'];
+    const modelsSupportingTools = ['gemini', 'llama-3.3-70b', 'deepseek', 'openai', 'gpt', 'gemma', 'qwen'];
     const supportsWebSearch = modelsSupportingTools.some(m => primaryModel.includes(m));
     if (!supportsWebSearch) {
       delete effectiveTools.web_search;
@@ -1568,7 +1570,7 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
       if (modelName.startsWith('gemini-') && googleProvider) {
         return googleProvider(modelName);
       }
-      if (modelName.includes('/') && openrouterApiKey) {
+      if (modelName.includes('/') && openrouterApiKey && modelName.endsWith(':free')) {
         const openrouterProvider = createOpenAI({
           baseURL: 'https://openrouter.ai/api/v1',
           apiKey: openrouterApiKey,
@@ -1579,14 +1581,14 @@ DILARANG KERAS menggunakan tag <think> atau menulis proses berpikir! LANGSUNG be
     };
 
     // Daftar urutan fallback model
-    // CATATAN: llama-3.1-8b-instant DIHAPUS dari fallback — model kecil ini tidak reliabel
-    // untuk tool calling dan sering menghasilkan raw XML <function> sebagai teks biasa.
     const candidateModels = [
       primaryModel,
       googleApiKey && 'gemini-2.5-flash',
-      groqApiKey && 'llama-3.3-70b-versatile',
+      groqApiKey && 'openai/gpt-oss-120b',
+      groqApiKey && 'openai/gpt-oss-20b',
+      groqApiKey && 'qwen/qwen3.6-27b',
       openrouterApiKey && 'openai/gpt-oss-20b:free',
-      openrouterApiKey && 'google/gemma-4-31b-it:free',
+      openrouterApiKey && 'google/gemma-4-26b-a4b-it:free',
     ].filter(Boolean) as string[];
 
     const modelsToTry = Array.from(new Set(candidateModels));

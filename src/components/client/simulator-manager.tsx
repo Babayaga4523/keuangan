@@ -273,8 +273,15 @@ export default function SimulatorManager({
           })
         });
         if (res.ok) {
-          const data = await res.json();
-          setAiRecommendation(data.recommendation);
+          const rawText = await res.text();
+          if (rawText) {
+            try {
+              const data = JSON.parse(rawText);
+              setAiRecommendation(data.recommendation || '');
+            } catch {
+              // ignore parse errors
+            }
+          }
         }
       } catch (err) {
         console.error('Failed to fetch AI recommendation for simulator:', err);

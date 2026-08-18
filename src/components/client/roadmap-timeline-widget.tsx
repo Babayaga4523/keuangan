@@ -32,8 +32,15 @@ export default function RoadmapTimelineWidget() {
       try {
         const res = await fetch('/api/roadmap');
         if (res.ok) {
-          const result = await res.json();
-          setData(result);
+          const rawText = await res.text();
+          if (rawText) {
+            try {
+              const result = JSON.parse(rawText);
+              setData(result);
+            } catch {
+              // ignore parse errors
+            }
+          }
         }
       } catch (err) {
         console.error('Failed to fetch roadmap:', err);

@@ -17,6 +17,13 @@ import {
 } from './schemas';
 import type { ActionResult } from '@/types/finance';
 
+// Helper: Validasi profil ketat untuk mencegah Profile Injection & Tampering
+export async function getValidatedProfile(): Promise<'silva' | 'yoga'> {
+  const cookieStore = await cookies();
+  const raw = cookieStore.get('current_profile')?.value;
+  return raw === 'yoga' ? 'yoga' : 'silva';
+}
+
 // Helper: revalidate semua halaman yang terdampak
 function revalidateAll() {
   revalidatePath('/dashboard');
@@ -193,8 +200,7 @@ export async function actionCreateSavingGoal(data: {
 
   const { name, targetAmount, currentAmount, deadline } = parsed.data;
   const supabase = createServerClient();
-  const cookieStore = await cookies();
-  const profile = cookieStore.get('current_profile')?.value || 'silva';
+  const profile = await getValidatedProfile();
 
   const { data: goal, error } = await supabase
     .from('saving_goals')
@@ -225,22 +231,25 @@ export async function actionUpdateSavingGoal(
   if (currentAmount < 0) return { success: false, error: 'Jumlah tidak boleh negatif' };
 
   const supabase = createServerClient();
+  const profile = await getValidatedProfile();
 
-  // Fetch target to check is_completed
+  // Fetch target to check is_completed and ensure profile ownership
   const { data: goalData, error: fetchErr } = await supabase
     .from('saving_goals')
     .select('target_amount')
     .eq('id', id)
+    .eq('profile', profile)
     .single();
 
-  if (fetchErr || !goalData) return { success: false, error: 'Target tabungan tidak ditemukan' };
+  if (fetchErr || !goalData) return { success: false, error: 'Target tabungan tidak ditemukan atau tidak memiliki akses' };
 
   const isCompleted = currentAmount >= parseFloat(String(goalData.target_amount));
 
   const { error } = await supabase
     .from('saving_goals')
     .update({ current_amount: currentAmount, is_completed: isCompleted })
-    .eq('id', id);
+    .eq('id', id)
+    .eq('profile', profile);
 
   if (error) return { success: false, error: error.message };
 
@@ -255,10 +264,13 @@ export async function actionDeleteSavingGoal(id: string): Promise<ActionResult> 
   if (!id) return { success: false, error: 'ID target tabungan diperlukan' };
 
   const supabase = createServerClient();
+  const profile = await getValidatedProfile();
+
   const { error } = await supabase
     .from('saving_goals')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .eq('profile', profile);
 
   if (error) return { success: false, error: error.message };
 
@@ -318,8 +330,7 @@ export async function actionUpsertBudget(data: {
 
   const { categoryId, amount, month, year } = parsed.data;
   const supabase = createServerClient();
-  const cookieStore = await cookies();
-  const profile = cookieStore.get('current_profile')?.value || 'silva';
+  const profile = await getValidatedProfile();
 
   const { data: budget, error } = await supabase
     .from('budgets')
@@ -343,8 +354,14 @@ export async function actionUpsertBudget(data: {
 export async function actionDeleteBudget(id: string): Promise<ActionResult> {
   if (!id) return { success: false, error: 'ID budget diperlukan' };
   const supabase = createServerClient();
+  const profile = await getValidatedProfile();
 
-  const { error } = await supabase.from('budgets').delete().eq('id', id);
+  const { error } = await supabase
+    .from('budgets')
+    .delete()
+    .eq('id', id)
+    .eq('profile', profile);
+
   if (error) return { success: false, error: error.message };
 
   revalidatePath('/budget');
@@ -370,8 +387,7 @@ export async function actionCreateRecurring(data: {
 
   const { accountId, categoryId, amount, type, description, frequency, dayOfMonth, nextDue } = parsed.data;
   const supabase = createServerClient();
-  const cookieStore = await cookies();
-  const profile = cookieStore.get('current_profile')?.value || 'silva';
+  const profile = await getValidatedProfile();
 
   const { data: rec, error } = await supabase
     .from('recurring_transactions')
@@ -402,8 +418,14 @@ export async function actionCreateRecurring(data: {
 export async function actionDeleteRecurring(id: string): Promise<ActionResult> {
   if (!id) return { success: false, error: 'ID recurring diperlukan' };
   const supabase = createServerClient();
+  const profile = await getValidatedProfile();
 
-  const { error } = await supabase.from('recurring_transactions').delete().eq('id', id);
+  const { error } = await supabase
+    .from('recurring_transactions')
+    .delete()
+    .eq('id', id)
+    .eq('profile', profile);
+
   if (error) return { success: false, error: error.message };
 
   revalidatePath('/recurring');
@@ -506,11 +528,13 @@ export async function actionUpdateAccountBalance(data: {
   }
 
   const supabase = createServerClient();
+  const profile = await getValidatedProfile();
 
   const { error } = await supabase
     .from('accounts')
     .update({ balance: data.balance })
-    .eq('id', data.accountId);
+    .eq('id', data.accountId)
+    .eq('profile', profile);
 
   if (error) return { success: false, error: error.message };
 
@@ -580,8 +604,7 @@ export async function actionCreateAccount(data: {
 
   const { name, type, balance } = parsed.data;
   const supabase = createServerClient();
-  const cookieStore = await cookies();
-  const profile = cookieStore.get('current_profile')?.value || 'silva';
+  const profile = await getValidatedProfile();
 
   const { data: acc, error } = await supabase
     .from('accounts')
@@ -630,8 +653,7 @@ export async function actionImportCSV(transactionsList: {
 // ───────────────────────────────────────────────
 export async function actionDeleteAccount(accountId: string): Promise<ActionResult> {
   const supabase = createServerClient();
-  const cookieStore = await cookies();
-  const profile = cookieStore.get('current_profile')?.value || 'silva';
+  const profile = await getValidatedProfile();
 
   const { error } = await supabase
     .from('accounts')

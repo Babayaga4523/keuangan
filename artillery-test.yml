@@ -1,0 +1,77 @@
+# ==============================================================================
+# 🎯 Artillery Load, Stress & Rate-Limit Security Testing for Opin
+# ==============================================================================
+# Cara menjalankan:
+# npm install -g artillery
+# artillery run artillery-test.yml
+# ==============================================================================
+
+config:
+  target: "http://localhost:3000"
+  phases:
+    - name: "1. Warm-up Phase"
+      duration: 10
+      arrivalRate: 2
+    - name: "2. Sustained Load & Rate-Limit Test"
+      duration: 20
+      arrivalRate: 10
+    - name: "3. Spike / DoS Stress Test"
+      duration: 10
+      arrivalRate: 25
+
+  defaults:
+    headers:
+      User-Agent: "Opin-Security-Pentest-Artillery/1.0"
+      Cookie: "current_profile=silva"
+
+scenarios:
+  # Scenario A: AI Recommendation Abuse / Cost Spiking Test
+  - name: "AI Advisor Recommendation Endpoint Flooding"
+    weight: 40
+    flow:
+      - post:
+          url: "/api/ai-advisor/recommendation?type=savings"
+          json:
+            query: "Bagaimana cara hemat bulan ini?"
+          capture:
+            - json: "$.recommendation"
+              as: "aiResponse"
+          expect:
+            - statusCode:
+                - 200
+                - 401
+                - 429
+                - 500
+
+  # Scenario B: Financial Data Query Flooding
+  - name: "Financial Data & Insights Read Flooding"
+    weight: 30
+    flow:
+      - get:
+          url: "/api/accounts"
+          expect:
+            - statusCode: 200
+      - get:
+          url: "/api/insights"
+          expect:
+            - statusCode: 200
+      - get:
+          url: "/api/roadmap"
+          expect:
+            - statusCode: 200
+
+  # Scenario C: Invalid / Malicious Payload Injection via API
+  - name: "Malformed Body & Injection Attack Simulation"
+    weight: 30
+    flow:
+      - post:
+          url: "/api/ai-advisor/recommendation?type=simulator"
+          json:
+            dreamName: "<script>alert('XSS')</script>"
+            dreamCost: -999999
+            startBalance: "abc"
+            timeline: []
+          expect:
+            - statusCode:
+                - 400
+                - 500

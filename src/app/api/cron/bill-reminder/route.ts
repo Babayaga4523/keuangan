@@ -12,9 +12,17 @@ export async function GET(req: Request) {
       );
     }
 
-    // 2. Autentikasi Cron Endpoint via Bearer Token
+    // 2. Autentikasi Cron Endpoint via Bearer Token (Proteksi Ketat)
+    const cronSecret = process.env.CRON_SECRET;
+    if (!cronSecret || cronSecret.trim() === '') {
+      return new Response(
+        JSON.stringify({ error: "Configuration Error: CRON_SECRET is required on server." }), 
+        { status: 500 }
+      );
+    }
+
     const authHeader = req.headers.get("authorization");
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
       return new Response("Unauthorized", { status: 401 });
     }
 

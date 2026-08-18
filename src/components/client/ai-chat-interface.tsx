@@ -787,18 +787,29 @@ const MemoizedMessageBubble = React.memo(({
                   ),
                   th: ({node, ...props}) => <th className="bg-slate-50 font-bold p-2.5 text-xs text-black border-b border-slate-200" {...props} />,
                   td: ({node, ...props}) => <td className="p-2.5 text-xs border-b border-slate-100 last:border-0 text-slate-750" {...props} />,
-                  a: ({node, href, children, ...props}: any) => (
-                    <a 
-                      href={href} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="text-blue-600 hover:text-blue-800 underline font-medium inline-flex items-center gap-1 hover:underline break-all transition-colors" 
-                      {...props}
-                    >
-                      {children}
-                      <ExternalLink className="w-3 h-3 inline-block shrink-0 opacity-70" />
-                    </a>
-                  ),
+                  a: ({node, href, children, ...props}: any) => {
+                    const isSafeHref = href && (
+                      href.startsWith('https://') || 
+                      href.startsWith('http://') || 
+                      href.startsWith('/') || 
+                      href.startsWith('mailto:')
+                    );
+                    if (!isSafeHref) {
+                      return <span className="font-semibold text-slate-700">{children}</span>;
+                    }
+                    return (
+                      <a 
+                        href={href} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-blue-600 hover:text-blue-800 underline font-medium inline-flex items-center gap-1 hover:underline break-all transition-colors" 
+                        {...props}
+                      >
+                        {children}
+                        <ExternalLink className="w-3 h-3 inline-block shrink-0 opacity-70" />
+                      </a>
+                    );
+                  },
                 }}
               >
                 {preprocessMath(cleanedContent)}

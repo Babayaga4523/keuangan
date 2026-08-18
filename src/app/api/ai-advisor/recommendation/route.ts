@@ -1,5 +1,6 @@
 import { generateText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createServerClient } from '@/lib/supabase-server';
 import { cookies } from 'next/headers';
 
@@ -7,23 +8,37 @@ export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   try {
+    const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY;
     const groqApiKey = process.env.GROQ_API_KEY;
     const openrouterApiKey = process.env.OPENROUTER_API_KEY;
-    const apiKey = groqApiKey || openrouterApiKey;
 
-    if (!apiKey) {
-      console.error('[AI Recommendation API Error] GROQ_API_KEY or OPENROUTER_API_KEY missing in environment variables.');
+    if (!googleApiKey && !groqApiKey && !openrouterApiKey) {
+      console.error('[AI Recommendation API Error] No AI API Key configured in environment variables.');
       return Response.json(
-        { error: 'GROQ_API_KEY atau OPENROUTER_API_KEY belum dikonfigurasi di environment server.' }, 
+        { error: 'API Key AI (Gemini / Groq / OpenRouter) belum dikonfigurasi di environment server.' }, 
         { status: 401 }
       );
     }
 
-    const aiProvider = createOpenAI({
-      baseURL: groqApiKey ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1',
-      apiKey: apiKey,
-    });
-    const selectedModel = groqApiKey ? 'llama-3.3-70b-versatile' : 'google/gemma-4-26b-a4b-it:free';
+    const getModel = () => {
+      if (googleApiKey) {
+        const google = createGoogleGenerativeAI({ apiKey: googleApiKey });
+        return google('gemini-2.5-flash');
+      }
+      if (groqApiKey) {
+        const groq = createOpenAI({
+          baseURL: 'https://api.groq.com/openai/v1',
+          apiKey: groqApiKey,
+        });
+        return groq('openai/gpt-oss-120b');
+      }
+      const openrouter = createOpenAI({
+        baseURL: 'https://openrouter.ai/api/v1',
+        apiKey: openrouterApiKey,
+      });
+      return openrouter('openai/gpt-oss-20b:free');
+    };
+
     const url = new URL(req.url);
     const type = url.searchParams.get('type') || 'savings';
     
@@ -61,7 +76,7 @@ Tugas: Berikan analisis cerdas apakah rencana ini "Aman", "Mepet (Kritis)", atau
 `;
 
       const { text } = await generateText({
-        model: aiProvider(selectedModel),
+        model: getModel(),
         prompt,
         temperature: 0.3
       });
@@ -111,7 +126,7 @@ Tugas: Berikan 1-2 kalimat saran optimasi hemat yang sangat spesifik berdasarkan
       let recommendationText = '';
       try {
         const { text } = await generateText({
-          model: aiProvider(selectedModel),
+          model: getModel(),
           prompt,
           temperature: 0.3
         });

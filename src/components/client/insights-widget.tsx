@@ -39,8 +39,15 @@ export default function InsightsWidget() {
       try {
         const res = await fetch('/api/insights');
         if (res.ok) {
-          const result = await res.json();
-          setData(result);
+          const rawText = await res.text();
+          if (rawText) {
+            try {
+              const result = JSON.parse(rawText);
+              setData(result);
+            } catch {
+              // ignore parse errors
+            }
+          }
         }
       } catch (err) {
         console.error('Failed to fetch insights:', err);

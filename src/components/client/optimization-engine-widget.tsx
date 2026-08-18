@@ -14,8 +14,15 @@ export default function OptimizationEngineWidget() {
           method: 'POST'
         });
         if (res.ok) {
-          const data = await res.json();
-          setRecommendation(data.recommendation);
+          const rawText = await res.text();
+          if (rawText) {
+            try {
+              const data = JSON.parse(rawText);
+              setRecommendation(data.recommendation || '');
+            } catch {
+              setRecommendation('Gagal memproses rekomendasi.');
+            }
+          }
         } else {
           setRecommendation('Gagal memuat rekomendasi otomatis. Pastikan Anda memiliki koneksi internet dan target tabungan aktif.');
         }
