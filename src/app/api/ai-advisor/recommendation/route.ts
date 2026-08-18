@@ -22,7 +22,10 @@ export async function POST(req: Request) {
 
     const getModel = () => {
       if (googleApiKey) {
-        const google = createGoogleGenerativeAI({ apiKey: googleApiKey });
+        const google = createOpenAI({
+          baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+          apiKey: googleApiKey,
+        });
         return google('gemini-2.5-flash');
       }
       if (groqApiKey) {

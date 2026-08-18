@@ -474,7 +474,10 @@ Setiap menjawab, ikuti alur ini secara implisit (tidak perlu ditampilkan ke user
       return new Response(JSON.stringify({ error: 'GOOGLE_GENERATIVE_AI_API_KEY, GROQ_API_KEY, atau OPENROUTER_API_KEY belum dikonfigurasi.' }), { status: 401 });
     }
 
-    const googleProvider = googleApiKey ? createGoogleGenerativeAI({ apiKey: googleApiKey }) : null;
+    const googleProvider = googleApiKey ? createOpenAI({
+      baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+      apiKey: googleApiKey,
+    }) : null;
     const aiProvider = createOpenAI({
       baseURL: groqApiKey ? 'https://api.groq.com/openai/v1' : 'https://openrouter.ai/api/v1',
       apiKey: groqApiKey || openrouterApiKey || '',
